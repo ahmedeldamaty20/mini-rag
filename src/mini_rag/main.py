@@ -1,7 +1,7 @@
 from fastapi import FastAPI
+from dotenv import load_dotenv
+load_dotenv()
+from routes import base
 
 app = FastAPI(title="mini-RAG", version="0.1")
-
-@app.get("/welcome")
-def welcome_message():
-    return {"message": "Welcome to mini-RAG! This is a simple FastAPI application."}
+app.include_router(base.base_router)
