@@ -17,15 +17,15 @@ class ProjectModel(BaseDataModel):
     # check if the collection not exists, create it and add indexes
     all_collections = await self.db_client.list_collection_names()
     if DataBaseEnum.COLLECTION_PROJECT_NAME.value not in all_collections:
-      self.collection = await self.db_client[DataBaseEnum.COLLECTION_PROJECT_NAME.value]
+      self.collection = self.db_client[DataBaseEnum.COLLECTION_PROJECT_NAME.value]
       indexes = Project.get_indexes()
       for index in indexes:
         await self.collection.create_index(index["key"], name=index["name"], unique=index["unique"])
 
   async def create_project(self, project: Project):
 
-    result = await self.collection.insert_one(project.dict(by_alias=True, exclude_unset=True))
-    project._id = result.inserted_id
+    result = await self.collection.insert_one(project.model_dump(by_alias=True, exclude_unset=True))
+    project.id = result.inserted_id
     return project
 
   async def get_project_or_create_one(self, project_id: str):

@@ -2,6 +2,12 @@ from fastapi import FastAPI
 from routes import base, data
 from motor.motor_asyncio import AsyncIOMotorClient
 from helpers.config import get_settings
+import logging
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+)
 
 app = FastAPI(title="mini-RAG", version="0.1")
 
