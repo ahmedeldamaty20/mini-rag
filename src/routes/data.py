@@ -128,6 +128,7 @@ async def process_data(request: Request, project_id: str, process_request: Proce
   
       file_chunks_records = [
         DataChunk(
+          _id=None,
           chunk_text=chunk.page_content,
           chunk_metadata=chunk.metadata,
           chunk_order= i + 1,
