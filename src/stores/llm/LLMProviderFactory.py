@@ -2,7 +2,6 @@ from helpers.config import settings
 from .LLMEnums import LLMEnums
 from .providers import OpenAIProvider, CohereProvider
 
-
 class LLMProviderFactory:
 
   def __init__(self, config: settings):

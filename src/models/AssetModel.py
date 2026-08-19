@@ -1,15 +1,18 @@
+from typing import Dict, Any, Optional
+
 from .BaseDataModel import BaseDataModel
 from .db_schemas import Asset
 from .enums.DataBaseEnum import DataBaseEnum
 from bson import ObjectId
+from motor.motor_asyncio import AsyncIOMotorDatabase
 
 class AssetModel(BaseDataModel):
-  def __init__(self, db_client: object):
+  def __init__(self, db_client: AsyncIOMotorDatabase):
     super().__init__(db_client)
     self.collection = self.db_client[DataBaseEnum.COLLECTION_ASSET_NAME.value]
 
   @classmethod
-  async def create_instance(cls, db_client: object):
+  async def create_instance(cls, db_client: AsyncIOMotorDatabase):
     instance = cls(db_client) # create an instance of the class so that we can call the __init__ method
     await instance.init_collection()
     return instance
@@ -25,11 +28,11 @@ class AssetModel(BaseDataModel):
 
   async def create_asset(self, asset: Asset):
     result = await self.collection.insert_one(asset.dict(by_alias=True, exclude_unset=True))
-    asset._id = result.inserted_id
+    asset.id = result.inserted_id
     return asset
 
-  async def get_assets_by_project_id(self, project_id: str, asset_type: str = None):
-    query = {"asset_project_id": ObjectId(project_id) if isinstance(project_id, str) else project_id}
+  async def get_assets_by_project_id(self, project_id: str, asset_type: Optional[str] = None):
+    query: Dict[str, Any] = {"asset_project_id": ObjectId(project_id) if isinstance(project_id, str) else project_id}
     if asset_type is not None:
       query["asset_type"] = asset_type
     result = self.collection.find(query)

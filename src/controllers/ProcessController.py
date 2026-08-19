@@ -1,3 +1,4 @@
+from typing import Optional
 from .BaseController import BaseController
 from .ProjectController import ProjectController
 from langchain_community.document_loaders import TextLoader
@@ -37,13 +38,13 @@ class ProcessController(BaseController):
     documents = loader.load()
     return documents
 
-  def process_file_content(self, file_content: list, file_id: str, chunk_size: int = 1000, overlap_size: int = 20):
+  def process_file_content(self, file_content: list, file_id: str, chunk_size: Optional[int] = 1000, overlap_size: Optional[int] = 20):
     text_splitter = RecursiveCharacterTextSplitter(
       chunk_size = chunk_size,
       chunk_overlap = overlap_size,
       length_function = len
     )
-
+  
     file_content_texts = [
       rec.page_content
       for rec in file_content

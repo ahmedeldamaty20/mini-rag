@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, UploadFile, status, Request
 from fastapi.responses import JSONResponse
 from helpers.config import get_settings, settings
-from controllers import DataController, ProjectController, ProcessController
+from controllers import DataController, ProcessController
 from models import ResponseSignals
 from .schemas.data import ProcessRequest
 from models.ProjectModel import ProjectModel
@@ -9,6 +9,7 @@ from models.ChunkModel import ChunkModel
 from models.AssetModel import AssetModel
 from models.db_schemas import DataChunk, Asset
 from models.enums.AssetTypeEnum import AssetTypeEnum
+from bson import ObjectId
 import logging
 import aiofiles
 import os
@@ -36,8 +37,7 @@ async def upload_data(request: Request, project_id: str, file: UploadFile, app_s
       content={"message": result_signal.value},
     )
 
-  project_directory_path = ProjectController().get_project_directory_path(project_id)
-  file_path, file_id = data_controller.generate_unique_filepath(file.filename, project_id)
+  file_path, file_id = data_controller.generate_unique_filepath(file.filename or "", project_id)
 
   try:
     async with aiofiles.open(file_path, 'wb') as out_file:
@@ -47,13 +47,14 @@ async def upload_data(request: Request, project_id: str, file: UploadFile, app_s
     logger.error(f"Error occurred while saving the file: {e}")
     return JSONResponse(
       status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-      content={"message": ResponseSignals.FILE_UPLOAD_FAILED.value},
+      content={"message": ResponseSignals.FILE_UPLOADED_FAILED.value},
     )
 
   # Save the file metadata to the database
   asset_model = await AssetModel.create_instance(db_client = request.app.db_client)
   asset = Asset(
-    asset_project_id=project.id,
+    _id = None,
+    asset_project_id=project.id, # type: ignore
     asset_type=AssetTypeEnum.FILE.value,
     asset_name=file_id,
     asset_size=os.path.getsize(file_path),
@@ -64,7 +65,7 @@ async def upload_data(request: Request, project_id: str, file: UploadFile, app_s
     status_code=status.HTTP_200_OK,
     content={
       "message": ResponseSignals.FILE_UPLOADED_SUCCESSFULLY.value,
-      "file_id": str(asset_response._id)
+      "file_id": str(asset_response.id)
     },
   )
 
@@ -81,16 +82,16 @@ async def process_data(request: Request, project_id: str, process_request: Proce
 
     asset_model = await AssetModel.create_instance(db_client = request.app.db_client)
 
-    project_files_ids = {}
+    project_files_ids: dict[ObjectId, str] = {}
 
     if process_request.file_id is not None:
-      asset_record = await asset_model.get_asset_record(project.id, process_request.file_id)
+      asset_record = await asset_model.get_asset_record(project.id, process_request.file_id) # type: ignore
       if asset_record is None:
         return JSONResponse(
           status_code=status.HTTP_400_BAD_REQUEST,
           content={"message": ResponseSignals.FILE_NOT_FOUND.value},
         )
-      project_files_ids[asset_record.id] = str(asset_record.asset_name)
+      project_files_ids[asset_record.id] = str(asset_record.asset_name) # type: ignore
     else:
       project_assets = await asset_model.get_assets_by_project_id(project.id, asset_type=AssetTypeEnum.FILE.value)
       project_files_ids = {str(asset.id): str(asset.asset_name) for asset in project_assets}
@@ -106,7 +107,7 @@ async def process_data(request: Request, project_id: str, process_request: Proce
     chunk_model = await ChunkModel.create_instance(db_client = request.app.db_client)
 
     if do_reset:
-      deleted_count = await chunk_model.delete_chunks_by_project_id(project.id)
+      deleted_count = await chunk_model.delete_chunks_by_project_id(project.id) # type: ignore
     
     num_inserted = 0
     num_files_processed = 0
@@ -123,7 +124,7 @@ async def process_data(request: Request, project_id: str, process_request: Proce
       if chunks is None or len(chunks) == 0:
         return JSONResponse(
           status_code=status.HTTP_400_BAD_REQUEST,
-          content={"message": ResponseSignals.FILE_PROCESSING_FAILED.value},
+          content={"message": ResponseSignals.FILE_PROCESSED_FAILED.value},
         )
   
       file_chunks_records = [
@@ -132,13 +133,15 @@ async def process_data(request: Request, project_id: str, process_request: Proce
           chunk_text=chunk.page_content,
           chunk_metadata=chunk.metadata,
           chunk_order= i + 1,
-          chunk_project_id=project.id,
+          chunk_project_id=project.id, # type: ignore
           chunk_asset_id=asset_id
         ) for i, chunk in enumerate(chunks)
       ]
-  
-      num_inserted += await chunk_model.insert_many_chunks(file_chunks_records)
-      num_files_processed += 1
+
+      inserted_result = await chunk_model.insert_many_chunks(file_chunks_records)
+      if inserted_result is not None:
+        num_inserted += inserted_result
+        num_files_processed += 1
 
     return JSONResponse(
       status_code=status.HTTP_200_OK,

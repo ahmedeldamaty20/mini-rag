@@ -2,15 +2,16 @@ from .BaseDataModel import BaseDataModel
 from .db_schemas import DataChunk
 from .enums.DataBaseEnum import DataBaseEnum
 from bson import ObjectId
+from motor.motor_asyncio import AsyncIOMotorDatabase
 from pymongo import InsertOne
 
 class ChunkModel(BaseDataModel):
-  def __init__(self, db_client: object):
+  def __init__(self, db_client: AsyncIOMotorDatabase):
     super().__init__(db_client)
     self.collection = self.db_client[DataBaseEnum.COLLECTION_CHUNK_NAME.value]
 
   @classmethod
-  async def create_instance(cls, db_client: object):
+  async def create_instance(cls, db_client: AsyncIOMotorDatabase):
     instance = cls(db_client) # create an instance of the class so that we can call the __init__ method
     await instance.init_collection()
     return instance
@@ -25,8 +26,8 @@ class ChunkModel(BaseDataModel):
           await self.collection.create_index(index["key"], name=index["name"], unique=index["unique"])
 
   async def create_chunk(self, chunk: DataChunk):
-    result = await self.collection.insert_one(chunk.dict(by_alias=True, exclude_unset=True))
-    chunk._id = result.inserted_id
+    result = await self.collection.insert_one(chunk.model_dump(by_alias=True, exclude_unset=True))
+    chunk.id = result.inserted_id
     return chunk
 
   async def get_chunk_by_id(self, chunk_id: str):
@@ -39,7 +40,7 @@ class ChunkModel(BaseDataModel):
     for i in range(0, len(chunks), bulk_size):
       bulk_chunks = chunks[i:i + bulk_size]
       requests = [
-        InsertOne(chunk.dict(by_alias=True, exclude_unset=True))
+        InsertOne(chunk.model_dump(by_alias=True, exclude_unset=True))
         for chunk in bulk_chunks
       ]
       await self.collection.bulk_write(requests)

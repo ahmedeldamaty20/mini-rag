@@ -1,14 +1,15 @@
 from .BaseDataModel import BaseDataModel
 from .db_schemas import Project
 from .enums.DataBaseEnum import DataBaseEnum
+from motor.motor_asyncio import AsyncIOMotorDatabase
 
 class ProjectModel(BaseDataModel):
-  def __init__(self, db_client: object):
+  def __init__(self, db_client: AsyncIOMotorDatabase):
     super().__init__(db_client)
     self.collection = self.db_client[DataBaseEnum.COLLECTION_PROJECT_NAME.value]
 
   @classmethod
-  async def create_instance(cls, db_client: object):
+  async def create_instance(cls, db_client: AsyncIOMotorDatabase):
     instance = cls(db_client) # create an instance of the class so that we can call the __init__ method
     await instance.init_collection()
     return instance
@@ -35,7 +36,10 @@ class ProjectModel(BaseDataModel):
     })
 
     if record is None:
-      project = Project(project_id = project_id)
+      project = Project(
+        _id = None,
+        project_id = project_id
+      )
       project = await self.create_project(project)
       return project
     
