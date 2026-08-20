@@ -25,7 +25,8 @@ class ProjectModel(BaseDataModel):
 
   async def create_project(self, project: Project):
 
-    result = await self.collection.insert_one(project.model_dump(by_alias=True, exclude_unset=True))
+    doc = project.model_dump(by_alias=True, exclude_unset=True)
+    result = await self.collection.insert_one(doc)
     project.id = result.inserted_id
     return project
 
@@ -36,10 +37,7 @@ class ProjectModel(BaseDataModel):
     })
 
     if record is None:
-      project = Project(
-        _id = None,
-        project_id = project_id
-      )
+      project = Project(project_id = project_id) # type: ignore
       project = await self.create_project(project)
       return project
     
@@ -49,7 +47,7 @@ class ProjectModel(BaseDataModel):
 
     total_documents = await self.collection.count_documents({})
 
-    total_pages = total_documents // page_size
+    total_pages = total_documents
     if (total_documents % page_size) > 0:
       total_pages += 1
 
