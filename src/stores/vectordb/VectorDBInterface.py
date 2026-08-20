@@ -28,15 +28,15 @@ class VectorDBInterface(ABC):
         pass
 
     @abstractmethod
-    def create_collection(self, collection_name: str, vector_dimension: int, do_reset: bool = False):
+    def create_collection(self, collection_name: str, vector_dimension: int, do_reset: bool = False) -> bool:
         pass
 
     @abstractmethod
-    def insert_one(self, collection_name: str, text: str, vector_id: str, vector: list, metadata: Optional[dict] = None):
+    def insert_one(self, collection_name: str, text: str, vector_id: str, vector: list, metadata: Optional[dict] = None) -> bool:
         pass
 
     @abstractmethod
-    def insert_many(self, collection_name: str, texts: List[str], vector_ids: List[str], vectors: List[list], metadatas: Optional[List[dict]] = None, batch_size: int = 100):
+    def insert_many(self, collection_name: str, texts: List[str], vector_ids: List[str], vectors: List[list], metadatas: Optional[List[dict]] = None, batch_size: int = 100) -> bool:
         pass
 
     @abstractmethod
