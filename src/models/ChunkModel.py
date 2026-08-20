@@ -36,6 +36,17 @@ class ChunkModel(BaseDataModel):
       return None
     return DataChunk(**result)
 
+  async def get_chunks_by_project_id(self, project_id: str, page_number: int = 1, page_size: int = 50):
+    result = self.collection.find({"chunk_project_id":project_id}).skip((page_number - 1) * page_size).limit(page_size)
+    chunks = []
+    async for chunk in result:
+      chunks.append(DataChunk(**chunk))
+    return chunks
+
+  async def get_chunks_count_by_project_id(self, project_id: str):
+    count = await self.collection.count_documents({"chunk_project_id":project_id})
+    return count
+
   async def insert_many_chunks(self, chunks: list[DataChunk], bulk_size: int = 100):
     for i in range(0, len(chunks), bulk_size):
       bulk_chunks = chunks[i:i + bulk_size]
@@ -45,7 +56,7 @@ class ChunkModel(BaseDataModel):
       ]
       await self.collection.bulk_write(requests)
 
-      return len(chunks)
+    return len(chunks)
 
   async def delete_chunks_by_project_id(self, project_id: ObjectId):
     result = await self.collection.delete_many({"chunk_project_id": project_id})
