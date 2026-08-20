@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, UploadFile, status, Request
 from fastapi.responses import JSONResponse
-from helpers.config import get_settings, settings
+from helpers.config import get_settings, Settings
 from controllers import DataController, ProcessController
 from models import ResponseSignals
 from .schemas.data import ProcessRequest
@@ -22,7 +22,7 @@ data_router = APIRouter(
 )
 
 @data_router.post("/upload/{project_id}")
-async def upload_data(request: Request, project_id: str, file: UploadFile, app_settings: settings = Depends(get_settings)):
+async def upload_data(request: Request, project_id: str, file: UploadFile, app_settings: Settings = Depends(get_settings)):
 
   project_model = await ProjectModel.create_instance(db_client = request.app.db_client)
 
@@ -70,7 +70,7 @@ async def upload_data(request: Request, project_id: str, file: UploadFile, app_s
   )
 
 @data_router.post("/process/{project_id}")
-async def process_data(request: Request, project_id: str, process_request: ProcessRequest, app_settings: settings = Depends(get_settings)):
+async def process_data(request: Request, project_id: str, process_request: ProcessRequest, app_settings: Settings = Depends(get_settings)):
     # file_id = process_request.file_id
     chunk_size = process_request.chunk_size
     overlap_size = process_request.overlap_size
@@ -93,8 +93,8 @@ async def process_data(request: Request, project_id: str, process_request: Proce
         )
       project_files_ids[asset_record.id] = str(asset_record.asset_name) # type: ignore
     else:
-      project_assets = await asset_model.get_assets_by_project_id(project.id, asset_type=AssetTypeEnum.FILE.value)
-      project_files_ids = {str(asset.id): str(asset.asset_name) for asset in project_assets}
+      project_assets = await asset_model.get_assets_by_project_id(project.id, asset_type=AssetTypeEnum.FILE.value) # type: ignore
+      project_files_ids = {str(asset.id): str(asset.asset_name) for asset in project_assets} # type: ignore
 
     if len(project_files_ids) == 0:
       return JSONResponse(
