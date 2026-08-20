@@ -1,9 +1,10 @@
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
-from routes import base, data
+from routes import base, data, nlp
 from motor.motor_asyncio import AsyncIOMotorClient
 from helpers.config import get_settings
 from stores.llm.LLMProviderFactory import LLMProviderFactory
+from stores.vectordb.VectorDBProviderFactory import VectorDBProviderFactory
 import logging
 
 logging.basicConfig(
@@ -12,8 +13,6 @@ logging.basicConfig(
 )
 
 logger = logging.getLogger("uvicorn")
-
-app = FastAPI(title="mini-RAG", version="0.1")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -33,11 +32,21 @@ async def lifespan(app: FastAPI):
     app.state.embedding_client = llm_provider_factory.get_provider(settings.EMBEDDING_BACKEND)
     app.state.embedding_client.set_embedding_model(settings.EMBEDDING_MODEL_ID, settings.EMBEDDING_MODEL_SIZE) # type: ignore
 
+    vector_db_provider_factory = VectorDBProviderFactory(settings)
+    app.state.vector_db_client = vector_db_provider_factory.get_provider(settings.VECTOR_DB_BACKEND)
+    app.state.vector_db_client.connect() # type: ignore
+
     yield
 
     # Shutdown
     app.state.mongo_conn.close()
     logger.info("Database connection closed.")
 
+    app.state.vector_db_client.disconnect() # type: ignore
+    logger.info("Vector DB connection closed.")
+
+app = FastAPI(title="mini-RAG", version="0.1", lifespan=lifespan)
+
 app.include_router(base.base_router)
 app.include_router(data.data_router)
+app.include_router(nlp.nlp_router)

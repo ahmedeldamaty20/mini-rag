@@ -1,0 +1,74 @@
+from fastapi import APIRouter, Depends, status, Request
+from fastapi.responses import JSONResponse
+from models.ProjectModel import ProjectModel
+from models.ChunkModel import ChunkModel
+from .schemas.nlp import PushRequest
+from controllers import NLPController
+from models import ResponseSignals
+import logging
+from bson import ObjectId
+
+logger = logging.getLogger('uvicorn.error')
+
+nlp_router = APIRouter(
+  prefix="/api/v1/nlp",
+  tags=["api_v1", "nlp"],
+)
+
+@nlp_router.post("/index/push/{project_id}")
+async def index_project_data(request: Request, project_id: str, push_request: PushRequest):
+  
+  project_model = await ProjectModel.create_instance(db_client = request.app.state.db_client)
+  
+  project = await project_model.get_project_or_create_one(project_id)
+
+  if not project:
+    return JSONResponse(
+      status_code=status.HTTP_404_NOT_FOUND,
+      content={"message": ResponseSignals.PROJECT_NOT_FOUND.value}
+    )
+
+  nlp_controller = NLPController(
+      vectordb_client = request.app.state.vector_db_client,
+      embedding_client = request.app.state.embedding_client, 
+      generation_client = request.app.state.generation_client
+    )
+
+  if push_request.do_reset is None:
+    push_request.do_reset = 0
+
+  chunk_model = await ChunkModel.create_instance(db_client = request.app.state.db_client)
+
+  # print(f"D_ Project ID: {project.id}, Project Name: {project.project_id}")  # Debugging line to check the project details
+  chunks_count = await chunk_model.get_chunks_count_by_project_id(project_id = project.id) # type: ignore
+
+  if chunks_count == 0:
+    return JSONResponse(
+      status_code=status.HTTP_404_NOT_FOUND,
+      content={"message": ResponseSignals.NO_FILES_FOUND_FOR_PROCESSING.value}
+    )
+
+  page_size = 50
+  inserted_count = 0
+
+  for page_number in range(1, (chunks_count // page_size) + 2):
+    data_chunks = await chunk_model.get_chunks_by_project_id(project_id = project.id, page_number = page_number, page_size =  page_size) # type: ignore
+    if not data_chunks:
+      break
+
+    is_indexed = nlp_controller.index_into_vector_db(project, data_chunks, push_request.do_reset)
+    if not is_indexed:
+      return JSONResponse(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        content={"message": ResponseSignals.INSERT_INTO_VECTOR_DB_ERROR.value}
+      )
+
+    inserted_count += len(data_chunks)
+
+  return JSONResponse(
+    status_code=status.HTTP_200_OK,
+    content={
+      "message": ResponseSignals.INSERT_INTO_VECTOR_DB_SUCCESS.value,
+      "inserted_count": inserted_count
+    }
+  )
