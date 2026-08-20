@@ -11,7 +11,7 @@ class DataController(BaseController):
 
   def validate_uplaoded_file(self, file: UploadFile):
     # Validate file size
-    if file.size > self.app_settings.FILE_MAX_SIZE * 1024 * 1024:
+    if file.size > self.app_settings.FILE_MAX_SIZE * 1024 * 1024: # type: ignore
       return False, ResponseSignals.FILE_SIZE_EXCEEDS_LIMIT
 
     # Validate file type
@@ -35,7 +35,7 @@ class DataController(BaseController):
       new_filename = f"{random_key}_{cleaned_filename}"
       new_file_path = os.path.join(project_directory_path, new_filename)
 
-    return new_file_path, new_filename
+    return new_file_path, new_filename # type: ignore
 
   def get_cleaned_file_name(self, original_filename: str) -> str:
     # Remove any special characters and spaces from the filename

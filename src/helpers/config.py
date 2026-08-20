@@ -1,6 +1,7 @@
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from functools import lru_cache
 
-class settings(BaseSettings):
+class Settings(BaseSettings):
 
   APP_NAME: str
   APP_VERSION: str
@@ -26,8 +27,12 @@ class settings(BaseSettings):
   GENERATION_DEFAULT_MAX_TOKENS: int
   GENERATION_DEFAULT_TEMPERATURE: float
 
-  class Config:
-    env_file = ".env"
+  VECTOR_DB_BACKEND: str
+  QDRANT_DB_PATH: str
+  QDRANT_DISTANCE_METHOD: str
 
-def get_settings() -> settings:
-  return settings()
+  model_config = SettingsConfigDict(env_file=".env")
+
+@lru_cache()
+def get_settings() -> Settings:
+  return Settings() # type: ignore
