@@ -31,6 +31,9 @@ class Settings(BaseSettings):
   QDRANT_DB_PATH: str
   QDRANT_DISTANCE_METHOD: str
 
+  PRIMARY_LANGUAGE: str
+  DEFAULT_LANGUAGE: str
+
   model_config = SettingsConfigDict(env_file=".env")
 
 @lru_cache()
