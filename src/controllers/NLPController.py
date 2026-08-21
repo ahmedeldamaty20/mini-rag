@@ -49,10 +49,6 @@ class NLPController(BaseController):
     collection_name = self.create_collection_name(project.project_id)
     query_vector = self.embedding_client.generate_embedding(query_text, DocumentTypeEnums.QUERY.value)
 
-    print(f"Searching in collection: {collection_name} for query: {query_text} with top_k: {top_k}")
-
-    print(f"Query vector: {query_vector}")
-
     if not query_vector:
       return []
 

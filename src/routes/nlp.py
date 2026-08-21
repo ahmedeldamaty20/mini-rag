@@ -39,7 +39,6 @@ async def index_project_data(request: Request, project_id: str, push_request: Pu
 
   chunk_model = await ChunkModel.create_instance(db_client = request.app.state.db_client)
 
-  # print(f"D_ Project ID: {project.id}, Project Name: {project.project_id}")  # Debugging line to check the project details
   chunks_count = await chunk_model.get_chunks_count_by_project_id(project_id = project.id) # type: ignore
 
   if chunks_count == 0:

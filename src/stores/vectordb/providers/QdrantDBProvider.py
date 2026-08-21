@@ -155,11 +155,7 @@ class QdrantDBProvider(VectorDBInterface):
           return []
 
         self.logger.info(f"Search completed in collection {collection_name} for top {top_k} results")
-
-        # print the points and their scores for debugging
-        for point in result.points:
-          print(f"Point: {point}")
-
+        
         return [
           RetrievedDocument(
             text=point.payload.get("text", ""),  # type: ignore
