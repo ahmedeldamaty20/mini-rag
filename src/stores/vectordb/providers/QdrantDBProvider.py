@@ -2,6 +2,7 @@ from typing import List, Optional
 from ..VectorDBInterface import VectorDBInterface
 from ..VectorDBEnums import DistanceMetodEnums
 from qdrant_client import QdrantClient, models
+from models.db_schemas import RetrievedDocument
 
 import logging
 
@@ -136,7 +137,7 @@ class QdrantDBProvider(VectorDBInterface):
       self.logger.error("Qdrant client is not connected.")
       return False
   
-  def search_by_vectors(self, collection_name: str, vectors: list, top_k: int) -> list:
+  def search_by_vectors(self, collection_name: str, vectors: list, top_k: int) -> List[RetrievedDocument]:
     if self.client:
       if not self.is_collection_exists(collection_name):
         self.logger.error(f"Collection does not exist: {collection_name}")
@@ -148,8 +149,19 @@ class QdrantDBProvider(VectorDBInterface):
           query=vectors,
           limit=top_k
         )
+
+        if not result or not result.points:
+          self.logger.warning(f"No results found for the query in collection {collection_name}")
+          return []
+
         self.logger.info(f"Search completed in collection {collection_name} for top {top_k} results")
-        return result.points if result else []
+        return [
+          RetrievedDocument(**{
+            "text": point.payload.get("text", ""), # type: ignore
+            "score": point.score # type: ignore
+          }) 
+          for point in result
+        ]
       except Exception as e:
         self.logger.error(f"Error occurred while searching in collection {collection_name}: {e}")
         return []

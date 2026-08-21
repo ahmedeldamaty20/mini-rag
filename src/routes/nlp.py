@@ -131,6 +131,6 @@ async def search_project_data(request: Request, project_id: str, search_request:
     status_code=status.HTTP_200_OK,
     content={
       "message": ResponseSignals.VECTOR_SEARCH_SUCCESS.value,
-      "results": search_results
+      "results": [result.model_dump() for result in search_results]
     }
   )
