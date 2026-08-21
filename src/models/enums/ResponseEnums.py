@@ -16,3 +16,5 @@ class ResponseSignals(Enum):
   GET_INDEX_INFO_SUCCESS = "Index information retrieved successfully."
   VECTOR_SEARCH_SUCCESS = "Vector search completed successfully."
   VECTOR_SEARCH_SUCCESS_NO_RESULTS = "Vector search completed successfully, but no results were found."
+  RAG_QUERY_ANSWER_FAILED = "Failed to generate an answer for the RAG query."
+  RAG_QUERY_ANSWER_SUCCESS = "Answer generated successfully for the RAG query."
