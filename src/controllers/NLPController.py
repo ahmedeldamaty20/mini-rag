@@ -3,6 +3,7 @@ from uuid import uuid4
 from .BaseController import BaseController
 from models.db_schemas import Project, DataChunk
 from typing import List, Optional
+import json
 from stores.llm.LLMEnums import DocumentTypeEnums
 
 class NLPController(BaseController):
@@ -42,4 +43,21 @@ class NLPController(BaseController):
     _ = self.vectordb_client.create_collection(collection_name, self.embedding_client.embedding_model_size, do_reset=do_reset)
 
     return self.vectordb_client.insert_many(collection_name, texts,  vector_ids, vectors, metadata_list)
+
+  async def search_in_vector_db(self, project: Project, query_text: str, top_k: Optional[int] = 10) -> list:
+
+    collection_name = self.create_collection_name(project.project_id)
+    query_vector = self.embedding_client.generate_embedding(query_text, DocumentTypeEnums.QUERY.value)
+
+    if not query_vector:
+      return []
+
+    search_results = self.vectordb_client.search_by_vectors(collection_name, query_vector, top_k=top_k)
+
+    if not search_results:
+      return []
+
+    return json.loads(
+      json.dumps(search_results, default=lambda o: o.__dict__ if hasattr(o, '__dict__') else str(o))
+    )
   
