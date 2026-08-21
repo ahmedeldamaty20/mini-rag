@@ -155,12 +155,17 @@ class QdrantDBProvider(VectorDBInterface):
           return []
 
         self.logger.info(f"Search completed in collection {collection_name} for top {top_k} results")
+
+        # print the points and their scores for debugging
+        for point in result.points:
+          print(f"Point: {point}")
+
         return [
-          RetrievedDocument(**{
-            "text": point.payload.get("text", ""), # type: ignore
-            "score": point.score # type: ignore
-          }) 
-          for point in result
+          RetrievedDocument(
+            text=point.payload.get("text", ""),  # type: ignore
+            score=point.score  # type: ignore
+          )
+          for point in result.points
         ]
       except Exception as e:
         self.logger.error(f"Error occurred while searching in collection {collection_name}: {e}")
