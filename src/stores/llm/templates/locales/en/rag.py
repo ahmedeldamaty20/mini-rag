@@ -19,5 +19,6 @@ document_prompt = Template("\n".join([
 
 footer_template = Template("\n".join([
   "Based on the above documents, please generate a response to the user query.",
+  "The query is: ${user_query}",
   "## Answer:",
 ]))

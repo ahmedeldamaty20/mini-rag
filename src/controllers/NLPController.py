@@ -77,13 +77,15 @@ class NLPController(BaseController):
       for idx, doc in enumerate(retrieved_docs, start=1)
     ])
 
-    footer_prompt = self.template_parser.get_template("rag", "footer_template", {})
+    footer_prompt = self.template_parser.get_template("rag", "footer_template", {
+      "user_query": query_text
+    })
 
     chat_history = [
       self.generation_client.construct_prompt(system_prompt, self.generation_client.enums.SYSTEM.value)
     ]
 
-    full_prompt = "\n\n".join([  documents_prompts, footer_prompt, f"User Query: {query_text}" ])
+    full_prompt = "\n\n".join([  documents_prompts, footer_prompt ])
 
     answer = self.generation_client.generate_text(full_prompt, chat_history=chat_history)
 
