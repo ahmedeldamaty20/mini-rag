@@ -14,7 +14,7 @@ class NLPController(BaseController):
     self.generation_client = generation_client
     self.template_parser = template_parser
 
-  def create_collection_name(self, project_id: str) -> str:
+  def create_collection_name(self, project_id: int) -> str:
     return f"collection_{project_id}".strip()
 
   def reset_vector_database_collection(self, project: Project) -> bool:

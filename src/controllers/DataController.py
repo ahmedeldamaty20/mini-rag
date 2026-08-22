@@ -20,7 +20,7 @@ class DataController(BaseController):
 
     return True, ResponseSignals.FILE_VALIDATION_SUCCESS
 
-  def generate_unique_filepath(self, original_filename: str, project_id: str) -> str:
+  def generate_unique_filepath(self, original_filename: str, project_id: int) -> str:
     random_key = self.generate_random_string(12)
     project_directory_path = ProjectController().get_project_directory_path(project_id)
 
