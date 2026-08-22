@@ -17,6 +17,7 @@ class Settings(BaseSettings):
   EMBEDDING_BACKEND: str
 
   OPENAI_API_KEY: str
+  OPENAI_BASE_URL: str
   COHERE_API_KEY: str
 
   GENERATION_MODEL_ID: str

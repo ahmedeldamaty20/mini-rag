@@ -5,9 +5,10 @@ from openai import OpenAI
 import logging
 
 class OpenAIProvider(LLMInterface):
-  def __init__(self, api_key: str, 
+  def __init__(self, api_key: str, api_url: Optional[str] = None,
   default_input_max_chars=1000, default_generation_max_output_tokens=1000, default_generation_temperature=0.1):
     self.api_key = api_key
+    self.api_url = api_url
 
     self.default_input_max_chars = default_input_max_chars
     self.default_generation_max_output_tokens = default_generation_max_output_tokens
@@ -18,7 +19,7 @@ class OpenAIProvider(LLMInterface):
     self.embedding_model_id = None
     self.embedding_model_size = None
 
-    self.client = OpenAI(api_key=self.api_key)
+    self.client = OpenAI(api_key=self.api_key, base_url=self.api_url) if self.api_key else None
 
     self.enums = OpenAIEnums
 
