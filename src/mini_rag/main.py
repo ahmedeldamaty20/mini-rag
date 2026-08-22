@@ -22,7 +22,7 @@ async def lifespan(app: FastAPI):
 
     postges_conn_str = f"postgresql+asyncpg://{settings.POSTGRES_USERNAME}:{settings.POSTGRES_PASSWORD}@{settings.POSTGRES_HOST}:{settings.POSTGRES_PORT}/{settings.POSTGRES_MAIN_DATABASE}"
     app.state.db_engine = create_async_engine(postges_conn_str)
-    app.state.db_session = async_sessionmaker(bind=app.state.db_engine, class_=AsyncSession, expire_on_commit=False)
+    app.state.db_client = async_sessionmaker(bind=app.state.db_engine, class_=AsyncSession, expire_on_commit=False)
     logger.info("Database connection established.")
 
     llm_provider_factory = LLMProviderFactory(settings)

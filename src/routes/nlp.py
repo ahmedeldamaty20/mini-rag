@@ -15,7 +15,7 @@ nlp_router = APIRouter(
 )
 
 @nlp_router.post("/index/push/{project_id}")
-async def index_project_data(request: Request, project_id: str, push_request: PushRequest):
+async def index_project_data(request: Request, project_id: int, push_request: PushRequest):
   
   project_model = await ProjectModel.create_instance(db_client = request.app.state.db_client)
   
@@ -39,7 +39,7 @@ async def index_project_data(request: Request, project_id: str, push_request: Pu
 
   chunk_model = await ChunkModel.create_instance(db_client = request.app.state.db_client)
 
-  chunks_count = await chunk_model.get_chunks_count_by_project_id(project_id = project.id) # type: ignore
+  chunks_count = await chunk_model.get_chunks_count_by_project_id(project_id = project.project_id) # type: ignore
 
   if chunks_count == 0:
     return JSONResponse(
@@ -51,7 +51,7 @@ async def index_project_data(request: Request, project_id: str, push_request: Pu
   inserted_count = 0
 
   for page_number in range(1, (chunks_count // page_size) + 2):
-    data_chunks = await chunk_model.get_chunks_by_project_id(project_id = project.id, page_number = page_number, page_size =  page_size) # type: ignore
+    data_chunks = await chunk_model.get_chunks_by_project_id(project_id = project.project_id, page_number = page_number, page_size =  page_size) # type: ignore
     if not data_chunks:
       break
 
@@ -73,7 +73,7 @@ async def index_project_data(request: Request, project_id: str, push_request: Pu
   )
 
 @nlp_router.get("/index/info/{project_id}")
-async def get_project_index_info(request: Request, project_id: str):
+async def get_project_index_info(request: Request, project_id: int):
   project_model = await ProjectModel.create_instance(db_client = request.app.state.db_client)
   
   project = await project_model.get_project_or_create_one(project_id)
@@ -102,7 +102,7 @@ async def get_project_index_info(request: Request, project_id: str):
   )
 
 @nlp_router.post("/index/search/{project_id}")
-async def search_project_data(request: Request, project_id: str, search_request: SearchRequest):
+async def search_project_data(request: Request, project_id: int, search_request: SearchRequest):
   
   project_model = await ProjectModel.create_instance(db_client = request.app.state.db_client)
   
@@ -139,7 +139,7 @@ async def search_project_data(request: Request, project_id: str, search_request:
 
 
 @nlp_router.post("/index/answer/{project_id}")
-async def answer_rag_query(request: Request, project_id: str, search_request: SearchRequest):
+async def answer_rag_query(request: Request, project_id: int, search_request: SearchRequest):
   
   project_model = await ProjectModel.create_instance(db_client = request.app.state.db_client)
   
