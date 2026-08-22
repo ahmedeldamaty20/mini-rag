@@ -86,7 +86,7 @@ class OpenAIProvider(LLMInterface):
   def construct_prompt(self, prompt: str, role: str) -> dict:
     return {
       "role": role,
-      "content": self.process_text(prompt)
+      "content": prompt
     }
 
   def process_text(self, text: str) -> str:
