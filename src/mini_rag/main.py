@@ -19,8 +19,6 @@ logger = logging.getLogger("uvicorn")
 async def lifespan(app: FastAPI):
     # Startup
     settings = get_settings()
-    app.state.mongo_conn = AsyncIOMotorClient(settings.MONGODB_URL)
-    app.state.db_client = app.state.mongo_conn[settings.MONGODB_DATABASE]
     logger.info("Database connection established.")
 
     llm_provider_factory = LLMProviderFactory(settings)
