@@ -1,11 +1,11 @@
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from routes import base, data, nlp
-from motor.motor_asyncio import AsyncIOMotorClient
 from helpers.config import get_settings
 from stores.llm.LLMProviderFactory import LLMProviderFactory
 from stores.vectordb.VectorDBProviderFactory import VectorDBProviderFactory
 from stores.llm.templates.template_parser import TemplateParser
+from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 import logging
 
 logging.basicConfig(
@@ -19,6 +19,10 @@ logger = logging.getLogger("uvicorn")
 async def lifespan(app: FastAPI):
     # Startup
     settings = get_settings()
+
+    postges_conn_str = f"postgresql+asyncpg://{settings.POSTGRES_USERNAME}:{settings.POSTGRES_PASSWORD}@{settings.POSTGRES_HOST}:{settings.POSTGRES_PORT}/{settings.POSTGRES_MAIN_DATABASE}"
+    app.state.db_engine = create_async_engine(postges_conn_str)
+    app.state.db_session = async_sessionmaker(bind=app.state.db_engine, class_=AsyncSession, expire_on_commit=False)
     logger.info("Database connection established.")
 
     llm_provider_factory = LLMProviderFactory(settings)
@@ -40,7 +44,7 @@ async def lifespan(app: FastAPI):
     yield
 
     # Shutdown
-    app.state.mongo_conn.close()
+    await app.state.db_engine.dispose()
     logger.info("Database connection closed.")
 
     app.state.vector_db_client.disconnect() # type: ignore
