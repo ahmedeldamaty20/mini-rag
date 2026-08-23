@@ -8,7 +8,7 @@ import json
 
 class PgVectorProvider(VectorDBInterface):
 
-  def __init__(self, db_client, default_vector_size: int, distance_method: str, index_threadhold: int = 1000):
+  def __init__(self, db_client, distance_method: str, default_vector_size: int, index_threadhold: int = 1000):
     self.db_client = db_client
     self.default_vector_size = default_vector_size
     self.index_threadhold = index_threadhold

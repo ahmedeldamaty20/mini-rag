@@ -3,7 +3,6 @@ from ..VectorDBInterface import VectorDBInterface
 from ..VectorDBEnums import DistanceMetodEnums
 from qdrant_client import QdrantClient, models
 from models.db_schemas import RetrievedDocument
-
 import logging
 
 class QdrantDBProvider(VectorDBInterface):
@@ -17,41 +16,41 @@ class QdrantDBProvider(VectorDBInterface):
     elif distance_method == DistanceMetodEnums.DOT.value:
       self.distance_method = models.Distance.DOT
 
-    self.logger = logging.getLogger(__name__)
+    self.logger = logging.getLogger("uvicorn")
 
-  def connect(self):
+  async def connect(self):
     self.client = QdrantClient(path=self.db_path)
     self.logger.info(f"Connected to QdrantDB at {self.db_path}")
 
-  def disconnect(self):
+  async def disconnect(self):
     if self.client:
       self.client.close()
       self.logger.info("Disconnected from QdrantDB")
 
-  def is_collection_exists(self, collection_name: str) -> bool:
+  async def is_collection_exists(self, collection_name: str) -> bool:
     if self.client:
       return self.client.collection_exists(collection_name)
     else:
       self.logger.error("Qdrant client is not connected.")
       return False
 
-  def list_all_collections(self) -> List:
+  async def list_all_collections(self) -> List:
     if self.client:
       return self.client.get_collections().collections
     else:
       self.logger.error("Qdrant client is not connected.")
       return []
 
-  def get_collection_info(self, collection_name: str) -> dict:
+  async def get_collection_info(self, collection_name: str) -> dict:
     if self.client:
       return self.client.get_collection(collection_name).model_dump()
     else:
       self.logger.error("Qdrant client is not connected.")
       return {}
 
-  def delete_collection(self, collection_name: str):
+  async def delete_collection(self, collection_name: str):
     if self.client:
-      if(self.is_collection_exists(collection_name)):
+      if(await self.is_collection_exists(collection_name)):
         self.client.delete_collection(collection_name)
         self.logger.info(f"Collection deleted: {collection_name}")
       else:
@@ -59,11 +58,11 @@ class QdrantDBProvider(VectorDBInterface):
     else:
       self.logger.error("Qdrant client is not connected.")
 
-  def create_collection(self, collection_name: str, vector_dimension: int, do_reset: bool = False) -> bool:
+  async def create_collection(self, collection_name: str, vector_dimension: int, do_reset: bool = False) -> bool:
     if self.client:
-      if self.is_collection_exists(collection_name):
+      if await self.is_collection_exists(collection_name):
         if do_reset:
-          _ = self.delete_collection(collection_name)
+          _ = await self.delete_collection(collection_name)
           self.logger.info(f"Collection reset: {collection_name}")
         else:
           self.logger.warning(f"Collection already exists: {collection_name}")
@@ -79,9 +78,9 @@ class QdrantDBProvider(VectorDBInterface):
       self.logger.error("Qdrant client is not connected.")
       return False
 
-  def insert_one(self, collection_name: str, text: str, vector_id: str, vector: list, metadata: Optional[dict] = None) -> bool:
+  async def insert_one(self, collection_name: str, text: str, vector_id: str, vector: list, metadata: Optional[dict] = None) -> bool:
     if self.client:
-      if not self.is_collection_exists(collection_name):
+      if not await self.is_collection_exists(collection_name):
         self.logger.error(f"Collection does not exist: {collection_name}")
         return False
 
@@ -105,9 +104,9 @@ class QdrantDBProvider(VectorDBInterface):
       self.logger.error("Qdrant client is not connected.")
       return False
 
-  def insert_many(self, collection_name: str, texts: List[str], vector_ids: List[str], vectors: List[list], metadatas: Optional[List[dict]] = None, batch_size: int = 100) -> bool:
+  async def insert_many(self, collection_name: str, texts: List[str], vector_ids: List[str], vectors: List[list], metadatas: Optional[List[dict]] = None, batch_size: int = 100) -> bool:
     if self.client:
-      if not self.is_collection_exists(collection_name):
+      if not await self.is_collection_exists(collection_name):
         self.logger.error(f"Collection does not exist: {collection_name}")
         return False
 
@@ -137,9 +136,9 @@ class QdrantDBProvider(VectorDBInterface):
       self.logger.error("Qdrant client is not connected.")
       return False
   
-  def search_by_vectors(self, collection_name: str, vectors: list, top_k: int) -> List[RetrievedDocument]:
+  async def search_by_vectors(self, collection_name: str, vectors: list, top_k: int) -> List[RetrievedDocument]:
     if self.client:
-      if not self.is_collection_exists(collection_name):
+      if not await self.is_collection_exists(collection_name):
         self.logger.error(f"Collection does not exist: {collection_name}")
         return []
 
@@ -169,7 +168,3 @@ class QdrantDBProvider(VectorDBInterface):
     else:
       self.logger.error("Qdrant client is not connected.")
       return []
-    
-
-
-
