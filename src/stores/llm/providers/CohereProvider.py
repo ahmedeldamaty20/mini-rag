@@ -1,6 +1,6 @@
 from ..LLMInterface import LLMInterface
 from ..LLMEnums import CohereEnums, DocumentTypeEnums
-from typing import Optional
+from typing import Optional, List, Union
 import cohere
 import logging
 
@@ -61,7 +61,7 @@ class CohereProvider(LLMInterface):
 
     return response.message.content[0].text # type: ignore
 
-  def generate_embedding(self, text: str, document_type: Optional[str] = None) -> Optional[list[float]]:
+  def generate_embedding(self, text: Union[str, List[str]], document_type: Optional[str] = None) -> Optional[list[List[float]]]:
     if not self.client:
       self.logger.error("Cohere client is not initialized. Please check your API key and URL.")
       return None
@@ -74,9 +74,12 @@ class CohereProvider(LLMInterface):
     if document_type == DocumentTypeEnums.QUERY.value:
       input_type = CohereEnums.QUERY.value
 
+    if isinstance(text, str):
+      text = [text]
+
     response = self.client.embed(
       model = self.embedding_model_id,
-      texts = [self.process_text(text)],
+      texts = [self.process_text(t) for t in text],
       input_type = input_type,
       embedding_types=["float"]
     )
@@ -85,7 +88,7 @@ class CohereProvider(LLMInterface):
       self.logger.error("Failed to generate embedding. Response is empty or invalid.")
       return None
 
-    return response.embeddings.float_[0]
+    return [embedding for embedding in response.embeddings.float_]
 
   def construct_prompt(self, prompt: str, role: str) -> dict:
     return { 
