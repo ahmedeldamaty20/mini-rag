@@ -1,5 +1,6 @@
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from functools import lru_cache
+from typing import List
 
 class Settings(BaseSettings):
 
@@ -23,17 +24,22 @@ class Settings(BaseSettings):
   OPENAI_BASE_URL: str
   COHERE_API_KEY: str
 
+  GENERATION_MODEL_ID_LITERALS: List[str]
   GENERATION_MODEL_ID: str
+  EMBEDDING_MODEL_ID_LITERALS: List[str]
   EMBEDDING_MODEL_ID: str
+  EMBEDDING_MODEL_SIZE_LITERALS: List[int]
   EMBEDDING_MODEL_SIZE: int
 
   INPUT_DEFAULT_MAX_CHARACTERS: int
   GENERATION_DEFAULT_MAX_TOKENS: int
   GENERATION_DEFAULT_TEMPERATURE: float
 
+  VECTOR_DB_LITERALS: List[str]
   VECTOR_DB_BACKEND: str
   QDRANT_DB_PATH: str
-  QDRANT_DISTANCE_METHOD: str
+  VECTOR_DB_DISTANCE_METHOD: str
+  VECTOR_DB_PGVECTOR_INDEX_THREADHOLD: int
 
   PRIMARY_LANGUAGE: str
   DEFAULT_LANGUAGE: str

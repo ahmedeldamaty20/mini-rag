@@ -1,6 +1,6 @@
 from ..LLMInterface import LLMInterface
 from ..LLMEnums import OpenAIEnums
-from typing import Optional
+from typing import Optional, List, Union
 from openai import OpenAI
 import logging
 
@@ -63,7 +63,7 @@ class OpenAIProvider(LLMInterface):
 
     return response.choices[0].message.content
 
-  def generate_embedding(self, text: str, document_type: Optional[str] = None) -> Optional[list[float]]:
+  def generate_embedding(self, text: Union[str, List[str]], document_type: Optional[str] = None) -> Optional[list[List[float]]]:
     if not self.client:
       self.logger.error("OpenAI client is not initialized. Please check your API key and URL.")
       return None
@@ -71,6 +71,9 @@ class OpenAIProvider(LLMInterface):
     if not self.embedding_model_id:
       self.logger.error("Embedding model is not set. Please set the embedding model before generating embeddings.")
       return None
+
+    if isinstance(text, str):
+      text = [text]
 
     response = self.client.embeddings.create(
       model=self.embedding_model_id,
@@ -81,7 +84,7 @@ class OpenAIProvider(LLMInterface):
       self.logger.error("Failed to generate embedding. Response is empty or invalid.")
       return None
 
-    return response.data[0].embedding 
+    return [ embedding.embedding for embedding in response.data ]
 
   def construct_prompt(self, prompt: str, role: str) -> dict:
     return {
