@@ -1,5 +1,5 @@
 from ..VectorDBInterface import VectorDBInterface
-from ..VectorDBEnums import DistanceMetodEnums, PgVectorDistanceMethodEnums, PgVectorTableSchemaEnums, PgVectorQueryOperatorEnums
+from ..VectorDBEnums import DistanceMetodEnums, PgVectorDistanceMethodEnums, PgVectorIndexTypeEnums, PgVectorTableSchemaEnums, PgVectorQueryOperatorEnums
 from models.db_schemas import RetrievedDocument
 from sqlalchemy.sql import text as sql_text
 from typing import List, Optional
@@ -8,9 +8,10 @@ import json
 
 class PgVectorProvider(VectorDBInterface):
 
-  def __init__(self, db_client, default_vector_size: int, distance_method: str):
+  def __init__(self, db_client, default_vector_size: int, distance_method: str, index_threadhold: int = 1000):
     self.db_client = db_client
     self.default_vector_size = default_vector_size
+    self.index_threadhold = index_threadhold
 
     if distance_method == DistanceMetodEnums.COSINE.value:
       self.distance_method = PgVectorDistanceMethodEnums.COSINE.value
@@ -23,7 +24,16 @@ class PgVectorProvider(VectorDBInterface):
 
     self.pgvector_table_prefix = PgVectorTableSchemaEnums._PREFIX.value
 
+    self.default_index_name = lambda collection_name: f"{self.pgvector_table_prefix}{collection_name}_vector_idx"
+
     self.logger = logging.getLogger("uvicorn")
+
+  def _get_safe_table_name(self, collection_name: str) -> str:
+    table_name = f"{self.pgvector_table_prefix}{collection_name}"
+    if not table_name.replace("_", "").isalnum():
+      self.logger.error(f"Invalid collection name: {collection_name}. Only alphanumeric characters and underscores are allowed.")
+      raise ValueError(f"Invalid collection name: {collection_name}. Only alphanumeric characters and underscores are allowed.")
+    return table_name
 
   async def connect(self):
     async with self.db_client.connect() as session:
@@ -122,12 +132,64 @@ class PgVectorProvider(VectorDBInterface):
     self.logger.info(f"Collection created: {collection_name} with dimension {vector_dimension}")
     return True
 
-  def _get_safe_table_name(self, collection_name: str) -> str:
-    table_name = f"{self.pgvector_table_prefix}{collection_name}"
-    if not table_name.replace("_", "").isalnum():
-      self.logger.error(f"Invalid collection name: {collection_name}. Only alphanumeric characters and underscores are allowed.")
-      raise ValueError(f"Invalid collection name: {collection_name}. Only alphanumeric characters and underscores are allowed.")
-    return table_name
+  async def is_index_exists(self, collection_name: str) -> bool:
+    index_name = self.default_index_name(collection_name)
+    async with self.db_client.connect() as session:
+      async with session.begin():
+        result = await session.execute(sql_text('''
+          SELECT EXISTS (
+            SELECT 1 FROM pg_indexes 
+            WHERE schemaname = :schema AND tablename = :table_name AND indexname = :index_name
+          )
+        '''), {"schema": "public", "table_name": self._get_safe_table_name(collection_name), "index_name": index_name})
+        exists = result.scalar_one()
+    return bool(exists)
+
+  async def create_vector_index(self, collection_name: str, index_type: str = PgVectorIndexTypeEnums.IVFFLAT.value) -> bool:
+    if not await self.is_collection_exists(collection_name):
+      self.logger.error(f"Collection does not exist: {collection_name}")
+      return False
+
+    index_name = self.default_index_name(collection_name)
+    table_name = self._get_safe_table_name(collection_name)
+
+    if await self.is_index_exists(collection_name):
+      self.logger.warning(f"Index already exists for collection: {collection_name}")
+      return False
+
+    async with self.db_client.connect() as session:
+      async with session.begin():
+        count_result = await session.execute(sql_text(
+          f'SELECT COUNT(*) FROM "{table_name}"'
+        ))
+        table_records_count = count_result.scalar_one()
+
+        if table_records_count < self.index_threadhold:
+          self.logger.info(f"Skipping index creation for collection: {collection_name} as record count ({table_records_count}) is below threshold ({self.index_threadhold})")
+          return False
+        
+        await session.execute(sql_text(f'''
+          CREATE INDEX "{index_name}" ON "{table_name}" USING {index_type} ({PgVectorTableSchemaEnums.VECTOR.value} {self.distance_method})
+        '''))
+    self.logger.info(f"Index created for collection: {collection_name} with index type: {index_type}")
+    return True
+
+  async def reset_vector_index(self, collection_name: str, index_type: str = PgVectorIndexTypeEnums.IVFFLAT.value) -> bool:
+    if not await self.is_collection_exists(collection_name):
+      self.logger.error(f"Collection does not exist: {collection_name}")
+      return False
+
+    index_name = self.default_index_name(collection_name)
+
+    if await self.is_index_exists(collection_name):
+      async with self.db_client.connect() as session:
+        async with session.begin():
+          await session.execute(sql_text(f'''
+            DROP INDEX IF EXISTS "{index_name}"
+          '''))
+      self.logger.info(f"Index dropped for collection: {collection_name}")
+
+    return await self.create_vector_index(collection_name, index_type)
 
   async def insert_one(self, collection_name: str, text: str, chunk_id: str, vector: list, metadata: Optional[dict] = None) -> bool:
     if not await self.is_collection_exists(collection_name):
