@@ -32,14 +32,14 @@ class NLPController(BaseController):
 
     texts = [chunk.chunk_text for chunk in data_chunks]
     metadata_list = [chunk.chunk_metadata for chunk in data_chunks]
-    vectors = self.embedding_client.generate_embeddings(texts, DocumentTypeEnums.DOCUMENT.value)
+    vectors = self.embedding_client.generate_embedding(texts, DocumentTypeEnums.DOCUMENT.value)
 
-    vector_ids = [str(uuid4()) for _ in data_chunks]
+    chunks_ids = [chunk.chunk_id for chunk in data_chunks]
 
     # create the collection if it doesn't exist
     _ = await self.vectordb_client.create_collection(collection_name, self.embedding_client.embedding_model_size, do_reset=do_reset)
 
-    return await self.vectordb_client.insert_many(collection_name, texts,  vector_ids, vectors, metadata_list)
+    return await self.vectordb_client.insert_many(collection_name, texts, chunks_ids, vectors, metadata_list)
 
   async def search_in_vector_db(self, project: Project, query_text: str, top_k: Optional[int] = 10) -> List[RetrievedDocument]:
 

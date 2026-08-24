@@ -141,8 +141,8 @@ async def process_data(request: Request, project_id: int, process_request: Proce
   
       file_chunks_records = [
         DataChunk(
-          chunk_text=chunk.page_content,
-          chunk_metadata=chunk.metadata,
+          chunk_text=chunk.texts[0],
+          chunk_metadata=chunk.metadatas[0] if chunk.metadatas else None,
           chunk_order= i + 1,
           chunk_project_id=project.project_id, # type: ignore
           chunk_asset_id=asset_id
