@@ -28,11 +28,11 @@ async def index_project_data(request: Request, project_id: int, push_request: Pu
     )
 
   nlp_controller = NLPController(
-      vectordb_client = request.app.state.vector_db_client,
-      embedding_client = request.app.state.embedding_client, 
-      generation_client = request.app.state.generation_client,
-      template_parser = request.app.state.template_parser
-    )
+    vectordb_client = request.app.state.vector_db_client,
+    embedding_client = request.app.state.embedding_client, 
+    generation_client = request.app.state.generation_client,
+    template_parser = request.app.state.template_parser
+  )
 
   if push_request.do_reset is None:
     push_request.do_reset = 0

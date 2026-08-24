@@ -10,6 +10,7 @@ from models.AssetModel import AssetModel
 from models.db_schemas import DataChunk, Asset
 from models.enums.AssetTypeEnum import AssetTypeEnum
 from bson import ObjectId
+from controllers import NLPController
 import logging
 import aiofiles
 import os
@@ -83,6 +84,13 @@ async def process_data(request: Request, project_id: int, process_request: Proce
 
     asset_model = await AssetModel.create_instance(db_client = request.app.state.db_client)
 
+    nlp_controller = NLPController(
+      vectordb_client = request.app.state.vector_db_client,
+      embedding_client = request.app.state.embedding_client, 
+      generation_client = request.app.state.generation_client,
+      template_parser = request.app.state.template_parser
+    )
+
     project_files_ids: dict[ObjectId, str] = {}
 
     if process_request.file_id is not None:
@@ -109,6 +117,9 @@ async def process_data(request: Request, project_id: int, process_request: Proce
 
     if do_reset:
       _ = await chunk_model.delete_chunks_by_project_id(project.project_id) # type: ignore
+
+      collection_name = nlp_controller.create_collection_name(project.project_id)
+      _ = await request.app.state.vector_db_client.delete_collection(collection_name)
     
     num_inserted = 0
     num_files_processed = 0

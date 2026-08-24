@@ -7,9 +7,10 @@ import logging
 
 class QdrantDBProvider(VectorDBInterface):
 
-  def __init__(self, db_path: str, distance_method: str):
+  def __init__(self, db_path: str, distance_method: str, default_vector_size: int):
     self.client = None
     self.db_path = db_path
+    self.default_vector_size = default_vector_size
 
     if distance_method == DistanceMetodEnums.COSINE.value:
       self.distance_method = models.Distance.COSINE
@@ -136,7 +137,7 @@ class QdrantDBProvider(VectorDBInterface):
       self.logger.error("Qdrant client is not connected.")
       return False
   
-  async def search_by_vectors(self, collection_name: str, vectors: list, top_k: int) -> List[RetrievedDocument]:
+  async def search_by_vector(self, collection_name: str, vector: list, top_k: int) -> List[RetrievedDocument]:
     if self.client:
       if not await self.is_collection_exists(collection_name):
         self.logger.error(f"Collection does not exist: {collection_name}")
@@ -145,7 +146,7 @@ class QdrantDBProvider(VectorDBInterface):
       try:
         result = self.client.query_points(
           collection_name=collection_name,
-          query=vectors,
+          query=vector,
           limit=top_k
         )
 

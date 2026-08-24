@@ -454,7 +454,7 @@ sequenceDiagram
   3. Instantiates `NLPController`.
   4. Calls `nlp_controller.search_in_vector_db(project, query_text, top_k)`:
      a. Converts query text to embedding vector via `embedding_client.generate_embedding(query_text, document_type="query")`.
-     b. Calls `vectordb_client.search_by_vectors("collection_{project_id}", query_vector, top_k=top_k)`.
+     b. Calls `vectordb_client.search_by_vector("collection_{project_id}", query_vector, top_k=top_k)`.
      c. Provider executes similarity metric (Cosine, Dot Product, or Euclidean Distance) and returns top `top_k` matches as `List[RetrievedDocument]`.
   5. Returns `200 OK` with JSON array of matching documents containing `text` and similarity `score`.
 
@@ -471,7 +471,7 @@ sequenceDiagram
     Router->>NLPCtrl: search_in_vector_db(project, "battery life", top_k=3)
     NLPCtrl->>EmbedLLM: generate_embedding("battery life", document_type="query")
     EmbedLLM-->>NLPCtrl: Returns query float vector
-    NLPCtrl->>VectorDB: search_by_vectors("collection_1", query_vector, top_k=3)
+    NLPCtrl->>VectorDB: search_by_vector("collection_1", query_vector, top_k=3)
     VectorDB-->>NLPCtrl: Returns List[RetrievedDocument(text=..., score=...)]
     NLPCtrl-->>Router: Returns search_results
     Router-->>Client: 200 OK {"message": "...", "results": [{"text": "...", "score": 0.89}]}
@@ -510,7 +510,7 @@ sequenceDiagram
     Client->>Router: POST /api/v1/nlp/index/answer/1 {"text": "How to reset?", "top_k": 3}
     Router->>NLPCtrl: answer_rag_query(project, "How to reset?", top_k=3)
     NLPCtrl->>NLPCtrl: search_in_vector_db(...)
-    NLPCtrl->>VectorDB: search_by_vectors(...)
+    NLPCtrl->>VectorDB: search_by_vector(...)
     VectorDB-->>NLPCtrl: Returns top retrieved documents
     NLPCtrl->>Parser: get_template("rag", "system_prompt", {})
     Parser-->>NLPCtrl: Returns system_prompt string
@@ -601,7 +601,7 @@ classDiagram
         +get_collection_info(collection_name)* dict
         +insert_one(collection_name, text, vector_id, vector, metadata)* bool
         +insert_many(collection_name, texts, vector_ids, vectors, metadatas)* bool
-        +search_by_vectors(collection_name, vectors, top_k)* List~RetrievedDocument~
+        +search_by_vector(collection_name, vector, top_k)* List~RetrievedDocument~
     }
 
     class QdrantDBProvider {
@@ -934,7 +934,7 @@ sequenceDiagram
    ↓ (Calls OpenAI Embeddings API)
 6. OpenAI API returns float vector [0.012, -0.054, ...]
    ↓
-7. src/stores/vectordb/providers/QdrantDBProvider.py: search_by_vectors("collection_1", query_vector, top_k=3)
+7. src/stores/vectordb/providers/QdrantDBProvider.py: search_by_vector("collection_1", query_vector, top_k=3)
    ↓
 8. Qdrant returns top 3 matching PointStruct records with text payloads and similarity scores
    ↓
@@ -989,7 +989,7 @@ sequenceDiagram
 
 - **"If I want to add a new Vector Database provider (e.g., ChromaDB, Milvus, Weaviate)?"**
   1. Create a new provider class under `src/stores/vectordb/providers/` inheriting from `VectorDBInterface`.
-  2. Implement all abstract methods (`connect`, `create_collection`, `insert_many`, `search_by_vectors`, etc.).
+  2. Implement all abstract methods (`connect`, `create_collection`, `insert_many`, `search_by_vector`, etc.).
   3. Add the provider literal name to `VectorDBEnums.py` and register instantiation logic in `VectorDBProviderFactory.py`.
 
 - **"If I want to add a new LLM provider (e.g., Anthropic, Gemini, Ollama)?"**

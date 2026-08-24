@@ -63,7 +63,7 @@ class OpenAIProvider(LLMInterface):
 
     return response.choices[0].message.content
 
-  def generate_embedding(self, text: Union[str, List[str]], document_type: Optional[str] = None) -> Optional[list[List[float]]]:
+  def generate_embedding(self, text: Union[str, List[str]], document_type: Optional[str] = None) -> Optional[List[List[float]]]:
     if not self.client:
       self.logger.error("OpenAI client is not initialized. Please check your API key and URL.")
       return None
