@@ -6,6 +6,7 @@ from stores.llm.LLMProviderFactory import LLMProviderFactory
 from stores.vectordb.VectorDBProviderFactory import VectorDBProviderFactory
 from stores.llm.templates.template_parser import TemplateParser
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
+from utils.metrics import setup_metrics
 import logging
 
 logging.basicConfig(
@@ -51,6 +52,8 @@ async def lifespan(app: FastAPI):
     logger.info("Vector DB connection closed.")
 
 app = FastAPI(title="mini-RAG", version="0.1", lifespan=lifespan)
+
+setup_metrics(app)
 
 app.include_router(base.base_router)
 app.include_router(data.data_router)
