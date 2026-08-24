@@ -38,3 +38,15 @@ services:
 
 
   # Postgres Exporter service (Monitoring for PostgreSQL metrics)
+  postgres_exporter:
+    image: prometheuscommunity/postgres-exporter:v0.20.1
+    container_name: postgres_exporter
+    env_file:
+      - ./env/.env.postgres_exporter
+    ports:
+      - "9187:9187"
+    networks:
+      - backend
+    restart: always
+    depends_on:
+      - pgvector
