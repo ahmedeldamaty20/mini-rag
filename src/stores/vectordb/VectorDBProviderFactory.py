@@ -18,7 +18,8 @@ class VectorDBProviderFactory:
       db_path = self.base_controller.get_database_path(self.config.QDRANT_DB_PATH)
       return QdrantDBProvider(
         db_path=db_path,
-        distance_method=self.config.VECTOR_DB_DISTANCE_METHOD
+        distance_method=self.config.VECTOR_DB_DISTANCE_METHOD,
+        default_vector_size=self.config.EMBEDDING_MODEL_SIZE
       )
     elif provider_name == VectorDBEnums.PGVECTOR.value:
       return PgVectorProvider(

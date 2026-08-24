@@ -258,7 +258,7 @@ class PgVectorProvider(VectorDBInterface):
     self.logger.info(f"Inserted {len(texts)} points into collection {collection_name}")
     return True
 
-  async def search_by_vectors(self, collection_name: str, vectors: list, top_k: int) -> List[RetrievedDocument]:
+  async def search_by_vector(self, collection_name: str, vector: list, top_k: int) -> List[RetrievedDocument]:
     if not await self.is_collection_exists(collection_name):
       self.logger.error(f"Collection does not exist: {collection_name}")
       return []
@@ -267,24 +267,24 @@ class PgVectorProvider(VectorDBInterface):
     retrieved_documents = []
 
     if self.distance_method == PgVectorDistanceMethodEnums.COSINE.value:
-      operand = PgVectorQueryOperatorEnums.COSINE.value
+      score_expr = f"1 - ({PgVectorTableSchemaEnums.VECTOR.value} {PgVectorDistanceMethodEnums.COSINE.value} :vector)"
     elif self.distance_method == PgVectorDistanceMethodEnums.DOT.value:
-      operand = PgVectorQueryOperatorEnums.DOT.value
+      score_expr = f"-({PgVectorTableSchemaEnums.VECTOR.value} {PgVectorDistanceMethodEnums.DOT.value} :vector)"  # negative of negative = positive
     elif self.distance_method == PgVectorDistanceMethodEnums.EUCLIDEAN.value:
-      operand = PgVectorQueryOperatorEnums.EUCLIDEAN.value
+      score_expr = f"1 / (1 + ({PgVectorTableSchemaEnums.VECTOR.value} {PgVectorDistanceMethodEnums.EUCLIDEAN.value} :vector))"  # normalized
     else:
       self.logger.error(f"Unsupported distance method: {self.distance_method}")
       return []
 
     async with self.db_client.connect() as session:
       async with session.begin():
-        vector = "[" + ", ".join(str(x) for x in vectors) + "]"
+        vector_str = "[" + ", ".join(str(x) for x in vector) + "]"
         result = await session.execute(sql_text(f'''
-          SELECT {PgVectorTableSchemaEnums.TEXT.value} as text, 1 - ({PgVectorTableSchemaEnums.VECTOR.value} {operand} :vector) as score
+          SELECT {PgVectorTableSchemaEnums.TEXT.value}, {score_expr} AS score
           FROM "{table_name}"
           ORDER BY score DESC
           LIMIT :top_k
-        '''), {"vector": vector, "top_k": top_k})
+        '''), {"vector": vector_str, "top_k": top_k})
         rows = result.fetchall()
 
         retrieved_documents = [

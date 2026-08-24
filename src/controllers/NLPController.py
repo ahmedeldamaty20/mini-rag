@@ -15,44 +15,41 @@ class NLPController(BaseController):
     self.template_parser = template_parser
 
   def create_collection_name(self, project_id: int) -> str:
-    return f"collection_{project_id}".strip()
+    return f"collection_{self.vectordb_client.default_vector_size}_{project_id}".strip()
 
-  def reset_vector_database_collection(self, project: Project) -> bool:
+  async def reset_vector_database_collection(self, project: Project) -> bool:
     collection_name = self.create_collection_name(project.project_id)
-    return self.vectordb_client.delete_collection(collection_name)
+    return await self.vectordb_client.delete_collection(collection_name)
 
-  def get_vector_db_collection_info(self, project: Project) -> dict:
+  async def get_vector_db_collection_info(self, project: Project) -> dict:
     collection_name = self.create_collection_name(project.project_id)
-    return self.vectordb_client.get_collection_info(collection_name)
+    return await self.vectordb_client.get_collection_info(collection_name)
 
-  def index_into_vector_db(self, project: Project, data_chunks: List[DataChunk], do_reset: int = False) -> bool:
+  async def index_into_vector_db(self, project: Project, data_chunks: List[DataChunk], do_reset: int = False) -> bool:
     collection_name = self.create_collection_name(project.project_id)
     if do_reset:
-      self.reset_vector_database_collection(project)
+      await self.reset_vector_database_collection(project)
 
     texts = [chunk.chunk_text for chunk in data_chunks]
     metadata_list = [chunk.chunk_metadata for chunk in data_chunks]
-    vectors = [
-      self.embedding_client.generate_embedding(text)
-      for text in texts
-    ]
+    vectors = self.embedding_client.generate_embeddings(texts, DocumentTypeEnums.DOCUMENT.value)
 
     vector_ids = [str(uuid4()) for _ in data_chunks]
 
     # create the collection if it doesn't exist
-    _ = self.vectordb_client.create_collection(collection_name, self.embedding_client.embedding_model_size, do_reset=do_reset)
+    _ = await self.vectordb_client.create_collection(collection_name, self.embedding_client.embedding_model_size, do_reset=do_reset)
 
-    return self.vectordb_client.insert_many(collection_name, texts,  vector_ids, vectors, metadata_list)
+    return await self.vectordb_client.insert_many(collection_name, texts,  vector_ids, vectors, metadata_list)
 
   async def search_in_vector_db(self, project: Project, query_text: str, top_k: Optional[int] = 10) -> List[RetrievedDocument]:
 
     collection_name = self.create_collection_name(project.project_id)
-    query_vector = self.embedding_client.generate_embedding(query_text, DocumentTypeEnums.QUERY.value)
+    query_vector = self.embedding_client.generate_embedding(query_text, DocumentTypeEnums.QUERY.value) # it will return Optional[list[List[float]]]
 
     if not query_vector:
       return []
 
-    search_results = self.vectordb_client.search_by_vectors(collection_name, query_vector, top_k=top_k)
+    search_results = await self.vectordb_client.search_by_vector(collection_name, query_vector[0], top_k=top_k)
 
     if not search_results:
       return []

@@ -61,7 +61,7 @@ class CohereProvider(LLMInterface):
 
     return response.message.content[0].text # type: ignore
 
-  def generate_embedding(self, text: Union[str, List[str]], document_type: Optional[str] = None) -> Optional[list[List[float]]]:
+  def generate_embedding(self, text: Union[str, List[str]], document_type: Optional[str] = None) -> Optional[List[List[float]]]:
     if not self.client:
       self.logger.error("Cohere client is not initialized. Please check your API key and URL.")
       return None
