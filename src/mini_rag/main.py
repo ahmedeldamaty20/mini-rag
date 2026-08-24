@@ -35,9 +35,9 @@ async def lifespan(app: FastAPI):
     app.state.embedding_client = llm_provider_factory.get_provider(settings.EMBEDDING_BACKEND)
     app.state.embedding_client.set_embedding_model(settings.EMBEDDING_MODEL_ID, settings.EMBEDDING_MODEL_SIZE) # type: ignore
 
-    vector_db_provider_factory = VectorDBProviderFactory(settings)
+    vector_db_provider_factory = VectorDBProviderFactory(settings, db_client=app.state.db_client)
     app.state.vector_db_client = vector_db_provider_factory.get_provider(settings.VECTOR_DB_BACKEND)
-    app.state.vector_db_client.connect() # type: ignore
+    await app.state.vector_db_client.connect() # type: ignore 
 
     app.state.template_parser = TemplateParser(settings.PRIMARY_LANGUAGE, settings.DEFAULT_LANGUAGE) # type: ignore
 
@@ -47,7 +47,7 @@ async def lifespan(app: FastAPI):
     await app.state.db_engine.dispose()
     logger.info("Database connection closed.")
 
-    app.state.vector_db_client.disconnect() # type: ignore
+    await app.state.vector_db_client.disconnect() # type: ignore
     logger.info("Vector DB connection closed.")
 
 app = FastAPI(title="mini-RAG", version="0.1", lifespan=lifespan)

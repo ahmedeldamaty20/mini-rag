@@ -2,12 +2,12 @@ from .providers import QdrantDBProvider, PgVectorProvider
 from helpers.config import Settings
 from .VectorDBEnums import VectorDBEnums
 from controllers.BaseController import BaseController
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.ext.asyncio import async_sessionmaker
 from typing import Optional
 
 class VectorDBProviderFactory:
 
-  def __init__(self, config: Settings, db_client: Optional[sessionmaker] = None):
+  def __init__(self, config: Settings, db_client: Optional[async_sessionmaker] = None):
       self.config = config
       self.base_controller = BaseController()
       self.db_client = db_client
@@ -22,6 +22,8 @@ class VectorDBProviderFactory:
         default_vector_size=self.config.EMBEDDING_MODEL_SIZE
       )
     elif provider_name == VectorDBEnums.PGVECTOR.value:
+      if self.db_client is None:
+        raise ValueError("db_client must be provided for PgVectorProvider.")
       return PgVectorProvider(
         db_client=self.db_client,
         distance_method=self.config.VECTOR_DB_DISTANCE_METHOD,

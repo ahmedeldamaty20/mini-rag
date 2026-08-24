@@ -52,7 +52,7 @@ async def index_project_data(request: Request, project_id: int, push_request: Pu
   
   _ = await request.app.state.vector_db_client.create_collection(
     collection_name, 
-    await nlp_controller.embedding_client.embedding_model_size,
+    nlp_controller.embedding_client.embedding_model_size,
     do_reset=push_request.do_reset
   )
 
@@ -66,7 +66,7 @@ async def index_project_data(request: Request, project_id: int, push_request: Pu
     if not data_chunks:
       break
 
-    is_indexed = await nlp_controller.index_into_vector_db(project, data_chunks, push_request.do_reset)
+    is_indexed = await nlp_controller.index_into_vector_db(project, data_chunks)
     if not is_indexed:
       return JSONResponse(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

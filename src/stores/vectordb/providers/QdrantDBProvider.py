@@ -105,7 +105,7 @@ class QdrantDBProvider(VectorDBInterface):
       self.logger.error("Qdrant client is not connected.")
       return False
 
-  async def insert_many(self, collection_name: str, texts: List[str], vector_ids: List[str], vectors: List[list], metadatas: Optional[List[dict]] = None, batch_size: int = 100) -> bool:
+  async def insert_many(self, collection_name: str, texts: List[str], chunks_ids: List[int], vectors: List[list], metadatas: Optional[List[dict]] = None, batch_size: int = 100) -> bool:
     if self.client:
       if not await self.is_collection_exists(collection_name):
         self.logger.error(f"Collection does not exist: {collection_name}")
@@ -117,7 +117,7 @@ class QdrantDBProvider(VectorDBInterface):
           payload = {"text": texts[i]}
           if metadatas and i < len(metadatas):
             payload.update(metadatas[i])
-          points.append(models.PointStruct(id=vector_ids[i], vector=vectors[i], payload=payload))
+          points.append(models.PointStruct(id=chunks_ids[i], vector=vectors[i], payload=payload))
       except (IndexError, KeyError) as e:
         self.logger.error(f"Error occurred while building points for collection {collection_name}: {e}")
         return False
