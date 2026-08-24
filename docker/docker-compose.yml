@@ -6,7 +6,18 @@ services:
 
 
   # PostgreSQL service (pgvector)
-
+  pgvector:
+    image: ankane/pgvector:0.8.6-pg18-trixie
+    container_name: pgvector
+    env_file:
+      - ./env/.env.postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgv_data:/var/lib/postgresql/data
+    networks:
+      - backend
+    restart: always
 
   # Qdrant service (Vector database)
 
