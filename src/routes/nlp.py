@@ -5,6 +5,7 @@ from models.ChunkModel import ChunkModel
 from .schemas.nlp import PushRequest, SearchRequest
 from controllers import NLPController
 from models import ResponseSignals
+from tqdm.auto import tqdm
 import logging
 
 logger = logging.getLogger('uvicorn.error')
@@ -47,6 +48,16 @@ async def index_project_data(request: Request, project_id: int, push_request: Pu
       content={"message": ResponseSignals.NO_FILES_FOUND_FOR_PROCESSING.value}
     )
 
+  collection_name = nlp_controller.create_collection_name(project.project_id)
+  
+  _ = await request.app.state.vector_db_client.create_collection(
+    collection_name, 
+    await nlp_controller.embedding_client.embedding_model_size,
+    do_reset=push_request.do_reset
+  )
+
+  pbar = tqdm(total=chunks_count, desc="Indexing data into vector database", unit="chunk", position=0) 
+
   page_size = 50
   inserted_count = 0
 
@@ -55,13 +66,14 @@ async def index_project_data(request: Request, project_id: int, push_request: Pu
     if not data_chunks:
       break
 
-    is_indexed = nlp_controller.index_into_vector_db(project, data_chunks, push_request.do_reset)
+    is_indexed = await nlp_controller.index_into_vector_db(project, data_chunks, push_request.do_reset)
     if not is_indexed:
       return JSONResponse(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         content={"message": ResponseSignals.INSERT_INTO_VECTOR_DB_ERROR.value}
       )
 
+    pbar.update(len(data_chunks))
     inserted_count += len(data_chunks)
 
   return JSONResponse(
@@ -91,7 +103,7 @@ async def get_project_index_info(request: Request, project_id: int):
       template_parser = request.app.state.template_parser
     )
 
-  collection_index_info = nlp_controller.get_vector_db_collection_info(project)
+  collection_index_info = await nlp_controller.get_vector_db_collection_info(project)
 
   return JSONResponse(
     status_code=status.HTTP_200_OK,

@@ -1,9 +1,6 @@
 from .BaseDataModel import BaseDataModel
 from .db_schemas import DataChunk
-from .enums.DataBaseEnum import DataBaseEnum
 from bson import ObjectId
-from motor.motor_asyncio import AsyncIOMotorDatabase
-from pymongo import InsertOne
 from sqlalchemy.future import select
 from sqlalchemy import func, delete
 
