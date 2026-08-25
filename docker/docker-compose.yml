@@ -17,6 +17,18 @@ services:
         - condition: service_healthy
 
   # Nginx service
+  nginx:
+    image: nginx:1.30.4
+    container_name: nginx
+    volumes:
+      - ./docker/nginx/nginx.conf:/etc/nginx/nginx.conf/default.conf
+    ports:
+      - "80:80"
+    networks:
+      - backend
+    restart: always
+    depends_on:
+      - fastapi
 
 
   # PostgreSQL service (pgvector)
@@ -120,3 +132,13 @@ services:
     restart: always
     depends_on:
       - pgvector
+
+networks:
+  backend:
+    driver: bridge
+
+volumes:
+  pgv_data:
+  qdrant_data:
+  prometheus_data:
+  grafana_data:
