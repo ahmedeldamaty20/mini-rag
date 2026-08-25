@@ -6,3 +6,7 @@ pgvector_data
 env/.env.*
 
 !env/.env.*.example
+
+minirag/alembic.ini
+
+!minirag/alembic.ini.example
