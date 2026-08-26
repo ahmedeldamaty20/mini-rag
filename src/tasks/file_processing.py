@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 def process_project_files(self, project_id: int, file_id: Optional[str], chunk_size: Optional[int], 
                           overlap_size: Optional[int], do_reset: Optional[int]):
   
-  asyncio.run(_process_project_files(self, project_id, file_id, chunk_size, overlap_size, do_reset))
+  return asyncio.run(_process_project_files(self, project_id, file_id, chunk_size, overlap_size, do_reset))
 
 async def _process_project_files(task_instance, project_id: int, file_id: Optional[str], chunk_size: Optional[int], 
                           overlap_size: Optional[int], do_reset: Optional[int]):

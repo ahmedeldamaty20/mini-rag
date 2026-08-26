@@ -52,6 +52,7 @@ class Settings(BaseSettings):
   CELERY_TASK_TIME_LIMIT: int
   CELERY_ACKS_LATE: bool
   CELERY_WORKER_CONCURRENCY: int
+  CELERY_FLOWER_PASSWORD: str
 
   model_config = SettingsConfigDict(env_file=".env")
 
