@@ -139,7 +139,7 @@ services:
 
   # RabbitMQ service (Message broker)
   rabbitmq:
-    image: rabbitmq:4.3.5-management
+    image: rabbitmq:3.13-management
     container_name: rabbitmq
     env_file:
       - ./env/.env.rabbitmq
