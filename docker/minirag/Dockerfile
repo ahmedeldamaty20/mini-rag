@@ -15,13 +15,21 @@ ENV UV_SYSTEM_PYTHON=1
 ENV PYTHONPATH=/app/src
 
 # Copy dependency files first to leverage Docker cache
-COPY src/pyproject.toml src/uv.lock ./
+COPY pyproject.toml uv.lock README.md ./
+
+# Copy application source
+COPY src ./src
+
+# Install system dependencies required for building Python packages and PostgreSQL client libraries
+RUN apk add --no-cache \
+    bash \
+    postgresql-dev \
+    gcc \
+    musl-dev \
+    python3-dev
 
 # Install dependencies
 RUN uv sync --locked --no-dev
-
-# Copy application source
-COPY src .
 
 # Create directory structure for alembic migrations
 RUN mkdir -p /app/models/db_schemas/minirag
@@ -37,12 +45,6 @@ RUN chmod +x /entrypoint.sh
 
 # Set the entrypoint
 ENTRYPOINT ["/entrypoint.sh"]
-
-# Expose FastAPI port
-EXPOSE 8000
-
-# Run alembic migrations to set up the database schema
-RUN alembic upgrade head
 
 # Expose FastAPI port
 EXPOSE 8000
