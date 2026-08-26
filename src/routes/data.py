@@ -9,8 +9,9 @@ from models.ChunkModel import ChunkModel
 from models.AssetModel import AssetModel
 from models.db_schemas import DataChunk, Asset
 from models.enums.AssetTypeEnum import AssetTypeEnum
-from bson import ObjectId
+from tasks.file_processing import process_project_files
 from controllers import NLPController
+from bson import ObjectId
 import logging
 import aiofiles
 import os
@@ -73,10 +74,20 @@ async def upload_data(request: Request, project_id: int, file: UploadFile, app_s
 
 @data_router.post("/process/{project_id}")
 async def process_data(request: Request, project_id: int, process_request: ProcessRequest, app_settings: Settings = Depends(get_settings)):
-    # file_id = process_request.file_id
+    file_id = process_request.file_id
     chunk_size = process_request.chunk_size
     overlap_size = process_request.overlap_size
     do_reset = process_request.do_reset
+
+    task = process_project_files.delay(project_id, file_id, chunk_size, overlap_size, do_reset)
+
+    return JSONResponse(
+        status_code=status.HTTP_202_ACCEPTED,
+        content={
+            "message": ResponseSignals.FILE_PROCESSING_STARTED.value,
+            "task_id": task.id
+        },
+    )
 
     project_model = await ProjectModel.create_instance(db_client = request.app.state.db_client)
     
