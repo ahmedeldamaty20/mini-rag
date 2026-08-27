@@ -125,7 +125,8 @@ async def _process_project_files(task_instance, project_id: int, file_id: Option
         "message": ResponseSignals.FILE_PROCESSED_SUCCESSFULLY.value,
         "num_chunks_inserted": num_inserted,
         "num_files_processed": num_files_processed,
-        "project_id": str(project.project_id)
+        "project_id": str(project.project_id),
+        "do_reset": do_reset
       }
   except Exception as e:
     logger.error(f"Error processing project files: {str(e)}")

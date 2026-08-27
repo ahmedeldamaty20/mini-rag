@@ -1,17 +1,15 @@
 from fastapi import APIRouter, Depends, UploadFile, status, Request
 from fastapi.responses import JSONResponse
 from helpers.config import get_settings, Settings
-from controllers import DataController, ProcessController
+from controllers import DataController
 from models import ResponseSignals
 from .schemas.data import ProcessRequest
 from models.ProjectModel import ProjectModel
-from models.ChunkModel import ChunkModel
 from models.AssetModel import AssetModel
-from models.db_schemas import DataChunk, Asset
+from models.db_schemas import Asset
 from models.enums.AssetTypeEnum import AssetTypeEnum
 from tasks.file_processing import process_project_files
-from controllers import NLPController
-from bson import ObjectId
+from tasks.process_workflow import process_and_push_data_to_vector_db
 import logging
 import aiofiles
 import os
@@ -80,6 +78,29 @@ async def process_data(request: Request, project_id: int, process_request: Proce
     do_reset = process_request.do_reset
 
     task = process_project_files.delay(project_id=project_id, file_id=file_id, chunk_size=chunk_size, overlap_size=overlap_size, do_reset=do_reset)
+
+    return JSONResponse(
+        status_code=status.HTTP_202_ACCEPTED,
+        content={
+            "message": ResponseSignals.FILE_PROCESSING_STARTED.value,
+            "task_id": task.id
+        },
+    )
+
+@data_router.post("/process-and-push/{project_id}")
+async def process_and_push_data(request: Request, project_id: int, process_request: ProcessRequest, app_settings: Settings = Depends(get_settings)):
+    file_id = process_request.file_id
+    chunk_size = process_request.chunk_size
+    overlap_size = process_request.overlap_size
+    do_reset = process_request.do_reset
+
+    task = process_and_push_data_to_vector_db.delay(
+      project_id=project_id, 
+      file_id=file_id, 
+      chunk_size=chunk_size, 
+      overlap_size=overlap_size,
+      do_reset=do_reset
+    )
 
     return JSONResponse(
         status_code=status.HTTP_202_ACCEPTED,
