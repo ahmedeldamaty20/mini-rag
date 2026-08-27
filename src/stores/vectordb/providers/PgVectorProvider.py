@@ -119,7 +119,7 @@ class PgVectorProvider(VectorDBInterface):
         ))
     self.logger.info(f"Collection deleted: {collection_name}")
 
-  async def create_collection(self, collection_name: str, vector_dimension: int, do_reset: bool = False) -> bool:
+  async def create_collection(self, collection_name: str, vector_dimension: int, do_reset: int = 0) -> bool:
     if await self.is_collection_exists(collection_name):
       if do_reset:
         await self.delete_collection(collection_name)

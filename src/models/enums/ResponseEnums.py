@@ -19,3 +19,5 @@ class ResponseSignals(Enum):
   RAG_QUERY_ANSWER_FAILED = "Failed to generate an answer for the RAG query."
   RAG_QUERY_ANSWER_SUCCESS = "Answer generated successfully for the RAG query."
   FILE_PROCESSING_STARTED = "File processing has been started. You can check the status of the task using the provided task ID."
+  INDEXING_TASK_STARTED = "Indexing task has been started. You can check the status of the task using the provided task ID."
+  VECTOR_DB_CLIENT_NOT_CONNECTED = "Vector database client is not connected."

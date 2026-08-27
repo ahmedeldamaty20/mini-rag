@@ -58,7 +58,10 @@ celery_app = Celery(
     settings.APP_NAME,
     broker=settings.CELERY_BROKER_URL,
     backend=settings.CELERY_RESULT_BACKEND,
-    include=["tasks.file_processing"]  # Include the module where your tasks are defined
+    include=[
+      "tasks.file_processing",
+      "tasks.data_indexing"
+    ]
 )
 
 # Configure Celery app
@@ -77,6 +80,7 @@ celery_app.conf.update(
   worker_cancel_long_running_tasks_on_connection_loss=True,
   task_routes={
     "tasks.file_processing.process_project_files": {"queue": "file_processing_queue"},
+    "tasks.data_indexing.index_data_content": {"queue": "data_indexing_queue"},
   }
 )
 

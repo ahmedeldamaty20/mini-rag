@@ -29,7 +29,7 @@ class VectorDBInterface(ABC):
         pass
 
     @abstractmethod
-    def create_collection(self, collection_name: str, vector_dimension: int, do_reset: bool = False) -> bool:
+    def create_collection(self, collection_name: str, vector_dimension: int, do_reset: int = 0) -> bool:
         pass
 
     @abstractmethod

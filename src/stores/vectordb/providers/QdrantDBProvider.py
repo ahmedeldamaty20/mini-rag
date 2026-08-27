@@ -59,7 +59,7 @@ class QdrantDBProvider(VectorDBInterface):
     else:
       self.logger.error("Qdrant client is not connected.")
 
-  async def create_collection(self, collection_name: str, vector_dimension: int, do_reset: bool = False) -> bool:
+  async def create_collection(self, collection_name: str, vector_dimension: int, do_reset: int = 0) -> bool:
     if self.client:
       if await self.is_collection_exists(collection_name):
         if do_reset:

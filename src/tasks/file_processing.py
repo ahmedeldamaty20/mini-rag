@@ -1,8 +1,6 @@
 from mini_rag.celery_app import celery_app, get_setup_utils
-from fastapi import status
 import asyncio
 from typing import Optional
-from fastapi.responses import JSONResponse
 from controllers import ProcessController
 from models import ResponseSignals
 from models.ProjectModel import ProjectModel
