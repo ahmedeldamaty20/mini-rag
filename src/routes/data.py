@@ -77,7 +77,15 @@ async def process_data(request: Request, project_id: int, process_request: Proce
     overlap_size = process_request.overlap_size
     do_reset = process_request.do_reset
 
-    task = process_project_files.delay(project_id=project_id, file_id=file_id, chunk_size=chunk_size, overlap_size=overlap_size, do_reset=do_reset)
+    logger.info(f"Received request to process data for project_id: {project_id}, file_id: {file_id}, chunk_size: {chunk_size}, overlap_size: {overlap_size}, do_reset: {do_reset}")
+
+    task = process_project_files.delay(
+      project_id=project_id, 
+      file_id=file_id, 
+      chunk_size=chunk_size, 
+      overlap_size=overlap_size, 
+      do_reset=do_reset
+    )
 
     return JSONResponse(
         status_code=status.HTTP_202_ACCEPTED,

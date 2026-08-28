@@ -20,7 +20,7 @@ class CeleryTaskExecution(SQLAlchemyBase):
   ended_at: Mapped[DateTime] = mapped_column(DateTime(timezone=True), nullable=True)
 
   __table_args__ = (
-    Index('ix_task_name_args_hash', task_name, task_args_hash, unique=True),
+    Index('ix_task_name_celery_task_id', task_name, task_args_hash, celery_task_id, unique=True),
     Index('ix_task_execution_status', status),
     Index('ix_task_execution_created_at', created_at),
     Index('ix_celery_task_id', celery_task_id),

@@ -3,7 +3,7 @@ import json
 from datetime import datetime, timezone
 from typing import Optional
 from sqlalchemy import select
-from src.models.db_schemas.minirag.schemas.celery_task_execution import CeleryTaskExecution
+from models.db_schemas.minirag.schemas.celery_task_execution import CeleryTaskExecution
 
 class IdempotencyManager:
   def __init__(self, db_client, db_engine):
@@ -21,7 +21,7 @@ class IdempotencyManager:
 
     return args_hash
 
-  def create_task_record(self, task_name: str, task_args: dict, celery_task_id: Optional[str] = None):
+  async def create_task_record(self, task_name: str, task_args: dict, celery_task_id: Optional[str] = None):
 
     args_hash = self.create_args_hash(task_name, task_args)
 
@@ -34,16 +34,16 @@ class IdempotencyManager:
       created_at=datetime.now(timezone.utc)
     )
 
-    with self.db_client.session() as connection:
+    async with self.db_client() as connection:
       connection.add(new_task_execution)
-      connection.commit()
-      connection.refresh(new_task_execution)  # Refresh to get the updated state from the database
+      await connection.commit()
+      await connection.refresh(new_task_execution)  # Refresh to get the updated state from the database
 
     return new_task_execution
   
-  def update_task_record(self, execution_id: int, status: str, result: Optional[dict] = None):
-    with self.db_client.session() as connection:
-      task_execution = connection.get(CeleryTaskExecution, execution_id)
+  async def update_task_record(self, execution_id: int, status: str, result: Optional[dict] = None):
+    async with self.db_client() as connection:
+      task_execution = await connection.get(CeleryTaskExecution, execution_id)
       if task_execution:
         task_execution.status = status
         if result is not None:
@@ -51,25 +51,27 @@ class IdempotencyManager:
         if status in ["SUCCESS", "FAILURE"]:
           task_execution.ended_at = datetime.now(timezone.utc)
         task_execution.updated_at = datetime.now(timezone.utc)
-        connection.commit()
+        await connection.commit()
       else:
         raise ValueError(f"Task execution with ID {execution_id} not found.")
 
-  def get_existing_task_record(self, task_name: str, task_args: dict) -> Optional[CeleryTaskExecution]:
+
+  async def get_existing_task_record(self, task_name: str, task_args: dict, celery_task_id: str) -> Optional[CeleryTaskExecution]:
     args_hash = self.create_args_hash(task_name, task_args)
 
-    with self.db_client.session() as connection:
-      existing_task_execution = connection.execute(
+    async with self.db_client() as connection:
+      existing_task_execution = await connection.execute(
         select(CeleryTaskExecution).where(
+          CeleryTaskExecution.celery_task_id == celery_task_id,
           CeleryTaskExecution.task_name == task_name,
           CeleryTaskExecution.task_args_hash == args_hash
         )
-      ).scalar_one_or_none()
+      )
 
-    return existing_task_execution
+      return existing_task_execution.scalar_one_or_none()
 
-  def should_execute_task(self, task_name: str, task_args: dict, task_time_limit: int = 600) -> tuple[bool, Optional[CeleryTaskExecution]]:
-    existing_task_execution = self.get_existing_task_record(task_name, task_args)
+  async def should_execute_task(self, task_name: str, task_args: dict, celery_task_id: str, task_time_limit: int = 600) -> tuple[bool, Optional[CeleryTaskExecution]]:
+    existing_task_execution = await self.get_existing_task_record(task_name, task_args, celery_task_id)
 
     if not existing_task_execution:
       return True, None

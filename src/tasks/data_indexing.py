@@ -10,7 +10,7 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-@celery_app.task(bind=True, name="tasks.file_processing.process_project_files", retry_kwargs={'max_retries': 3, 'countdown': 60}, auto_retry_for=(Exception,))
+@celery_app.task(bind=True, name="tasks.file_processing.index_data_content", retry_kwargs={'max_retries': 3, 'countdown': 60}, auto_retry_for=(Exception,))
 def index_data_content(self, project_id: int, do_reset: Optional[int] = 0):
   return asyncio.run(_index_data_content(self, project_id, do_reset))
 
