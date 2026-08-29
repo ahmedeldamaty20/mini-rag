@@ -20,6 +20,66 @@ services:
       pgvector:
         condition: service_healthy
 
+  celery_worker:
+    build:
+      context: ..
+      dockerfile: docker/minirag/Dockerfile
+    container_name: celery_worker
+    volumes:
+      - fastapi_data:/app/assets
+    env_file:
+      - ./env/.env.app
+    networks:
+      - backend
+    restart: always
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      pgvector:
+        condition: service_healthy
+    command: ["uv", "run", "celery", "-A", "mini_rag.celery_app", "worker", "--queues=default,file_processing_queue", "--loglevel=info"]
+
+  celery_beat:
+    build:
+      context: ..
+      dockerfile: docker/minirag/Dockerfile
+    container_name: celery_beat
+    volumes:
+      - fastapi_data:/app/assets
+      - celery_beat_data:/app/celery_beat
+    env_file:
+      - ./env/.env.app
+    networks:
+      - backend
+    restart: always
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: ["uv", "run", "celery", "-A", "mini_rag.celery_app", "beat", "--loglevel=info"]
+    
+  celery_flower:
+    build:
+      context: ..
+      dockerfile: docker/minirag/Dockerfile
+    container_name: celery_flower
+    volumes:
+      - fastapi_data:/app/assets
+    env_file:
+      - ./env/.env.app
+    ports:
+      - "5555:5555"
+    networks:
+      - backend
+    restart: always
+    depends_on:
+      - rabbitmq
+      - celery_worker
+    command: ["uv", "run", "celery", "-A", "mini_rag.celery_app", "flower", "--config=flowerconfig.py"]
+
   # Nginx service
   nginx:
     image: nginx:1.30.4
@@ -137,6 +197,47 @@ services:
     depends_on:
       - pgvector
 
+  # RabbitMQ service (Message broker)
+  rabbitmq:
+    image: rabbitmq:3.13-management
+    container_name: rabbitmq
+    env_file:
+      - ./env/.env.rabbitmq
+    ports:
+      - "5672:5672"   # AMQP port (for message broker)
+      - "15672:15672" # UI port (for management interface)
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+      - ./rabbitmq/rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf
+    networks:
+      - backend
+    restart: always
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 30s
+      timeout: 30s
+      retries: 5
+      start_period: 10s
+
+  redis:
+    image: redis:8.8
+    container_name: redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    env_file:
+      - ./env/.env.redis
+    networks:
+      - backend
+    restart: always
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      timeout: 30s
+      interval: 30s
+      retries: 5
+    command: ["redis-server", "--appendonly", "yes", "--requirepass", "${REDIS_PASSWORD}"]
+
 networks:
   backend:
     driver: bridge
@@ -147,3 +248,6 @@ volumes:
   prometheus_data:
   grafana_data:
   fastapi_data:
+  rabbitmq_data:
+  redis_data:
+  celery_beat_data:

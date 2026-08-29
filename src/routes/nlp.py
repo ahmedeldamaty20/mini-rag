@@ -3,6 +3,7 @@ from fastapi.responses import JSONResponse
 from models.ProjectModel import ProjectModel
 from models.ChunkModel import ChunkModel
 from .schemas.nlp import PushRequest, SearchRequest
+from tasks.data_indexing import index_data_content
 from controllers import NLPController
 from models import ResponseSignals
 from tqdm.auto import tqdm
@@ -17,70 +18,14 @@ nlp_router = APIRouter(
 
 @nlp_router.post("/index/push/{project_id}")
 async def index_project_data(request: Request, project_id: int, push_request: PushRequest):
-  
-  project_model = await ProjectModel.create_instance(db_client = request.app.state.db_client)
-  
-  project = await project_model.get_project_or_create_one(project_id)
 
-  if not project:
-    return JSONResponse(
-      status_code=status.HTTP_404_NOT_FOUND,
-      content={"message": ResponseSignals.PROJECT_NOT_FOUND.value}
-    )
-
-  nlp_controller = NLPController(
-    vectordb_client = request.app.state.vector_db_client,
-    embedding_client = request.app.state.embedding_client, 
-    generation_client = request.app.state.generation_client,
-    template_parser = request.app.state.template_parser
-  )
-
-  if push_request.do_reset is None:
-    push_request.do_reset = 0
-
-  chunk_model = await ChunkModel.create_instance(db_client = request.app.state.db_client)
-
-  chunks_count = await chunk_model.get_chunks_count_by_project_id(project_id = project.project_id) # type: ignore
-
-  if chunks_count == 0:
-    return JSONResponse(
-      status_code=status.HTTP_404_NOT_FOUND,
-      content={"message": ResponseSignals.NO_FILES_FOUND_FOR_PROCESSING.value}
-    )
-
-  collection_name = nlp_controller.create_collection_name(project.project_id)
-  
-  _ = await request.app.state.vector_db_client.create_collection(
-    collection_name, 
-    nlp_controller.embedding_client.embedding_model_size,
-    do_reset=push_request.do_reset
-  )
-
-  pbar = tqdm(total=chunks_count, desc="Indexing data into vector database", unit="chunk", position=0) 
-
-  page_size = 50
-  inserted_count = 0
-
-  for page_number in range(1, (chunks_count // page_size) + 2):
-    data_chunks = await chunk_model.get_chunks_by_project_id(project_id = project.project_id, page_number = page_number, page_size =  page_size) # type: ignore
-    if not data_chunks:
-      break
-
-    is_indexed = await nlp_controller.index_into_vector_db(project, data_chunks)
-    if not is_indexed:
-      return JSONResponse(
-        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-        content={"message": ResponseSignals.INSERT_INTO_VECTOR_DB_ERROR.value}
-      )
-
-    pbar.update(len(data_chunks))
-    inserted_count += len(data_chunks)
+  task = index_data_content.delay(project_id=project_id, do_reset=push_request.do_reset)
 
   return JSONResponse(
-    status_code=status.HTTP_200_OK,
+    status_code=status.HTTP_202_ACCEPTED,
     content={
-      "message": ResponseSignals.INSERT_INTO_VECTOR_DB_SUCCESS.value,
-      "inserted_count": inserted_count
+      "message": ResponseSignals.INDEXING_TASK_STARTED.value,
+      "task_id": task.id
     }
   )
 

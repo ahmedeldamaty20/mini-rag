@@ -17,10 +17,12 @@ class Settings(BaseSettings):
   POSTGRES_PORT: int
   POSTGRES_MAIN_DATABASE: str
 
+  BACKEND_LITERALS: List[str]
   GENERATION_BACKEND: str
   EMBEDDING_BACKEND: str
 
   OPENAI_API_KEY: str
+  OPENAI_BASE_URL_Literals: List[str]
   OPENAI_BASE_URL: str
   COHERE_API_KEY: str
 
@@ -43,6 +45,14 @@ class Settings(BaseSettings):
 
   PRIMARY_LANGUAGE: str
   DEFAULT_LANGUAGE: str
+
+  CELERY_BROKER_URL: str
+  CELERY_RESULT_BACKEND: str
+  CELERY_TASK_SERIALIZER: str
+  CELERY_TASK_TIME_LIMIT: int
+  CELERY_ACKS_LATE: bool
+  CELERY_WORKER_CONCURRENCY: int
+  CELERY_FLOWER_PASSWORD: str
 
   model_config = SettingsConfigDict(env_file=".env")
 
