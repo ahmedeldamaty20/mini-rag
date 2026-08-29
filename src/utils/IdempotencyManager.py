@@ -1,8 +1,8 @@
 import hashlib
 import json
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from typing import Optional
-from sqlalchemy import select
+from sqlalchemy import select, delete
 from models.db_schemas.minirag.schemas.celery_task_execution import CeleryTaskExecution
 
 class IdempotencyManager:
@@ -93,3 +93,13 @@ class IdempotencyManager:
 
     return True, existing_task_execution
 
+  async def cleanup_old_task_records(self, time_retention: int = 86400):
+    cutoff_time = datetime.now(timezone.utc) - timedelta(days=time_retention)
+
+    async with self.db_client() as connection:
+      await connection.execute(
+        delete(CeleryTaskExecution).where(
+          CeleryTaskExecution.created_at < cutoff_time
+        )
+      )
+      await connection.commit()
