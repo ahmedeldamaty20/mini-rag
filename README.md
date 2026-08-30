@@ -1,1006 +1,621 @@
-# mini-RAG: Production Architecture & Comprehensive System Documentation
+# Mini-RAG: Production-Grade Asynchronous Retrieval-Augmented Generation Architecture
 
-Welcome to **mini-RAG**, a lightweight, scalable, and modular Retrieval-Augmented Generation (RAG) framework built with Python 3.12+, FastAPI, SQLAlchemy (Async), PostgreSQL, and pluggable Vector Database (Qdrant / PgVector) and LLM (OpenAI / Cohere) providers.
+[![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-009688.svg)](https://fastapi.tiangolo.com/)
+[![Celery](https://img.shields.io/badge/Celery-5.4+-37B24D.svg)](https://docs.celeryq.dev/)
+[![Docker](https://img.shields.io/badge/Docker-Enabled-2496ED.svg)](https://www.docker.com/)
+[![Notion Learning Notes](https://img.shields.io/badge/Notion-Learning%20Notes-000000?style=for-the-badge&logo=notion)](https://app.notion.com/p/mini-rag-notes-3c98ceeb768e80c1b536df7970d4c5dd?source=copy_link)
+[![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
-This documentation serves as an inside-out architectural manual for developers. It details how every component, service, model, provider, and API route functions, how data flows through the system, and how the entire codebase is interconnected.
+> 📝 **Developer Learning Notes & Insights**:
+> Explore the author's personal Notion notes containing key engineering learnings, trade-offs, and architectural takeaways acquired while building Mini-RAG:
+>
+> 🚀 👉 [**Read Mini-RAG Learning Notes on Notion**](https://app.notion.com/p/mini-rag-notes-3c98ceeb768e80c1b536df7970d4c5dd?source=copy_link)
+
+---
+
+> This `README.md` provides a high-level, production-oriented overview of Mini-RAG.
+> 
+> 📖 **Deep Technical Architecture**: For route-by-route deep dives, exact class relationships, internal data flows, and database schema mappings, see:
+> [**PROJECT_ARCHITECTURE.md**](https://github.com/ahmedeldamaty20/mini-rag/blob/main/PROJECT_ARCHITECTURE.md)
+
+---
+
+**Mini-RAG** is a scalable, resilient, production-ready Retrieval-Augmented Generation (RAG) framework designed for asynchronous document processing, vector search indexing, and LLM-powered context retrieval.
+
+Built with **FastAPI**, **Celery**, **RabbitMQ**, **Redis**, **PostgreSQL / PgVector**, **Qdrant**, **Prometheus**, and **Grafana**, Mini-RAG handles long-running ETL and embedding workloads asynchronously while providing custom SHA-256 idempotency protection, worker crash recovery, and multi-vendor provider abstraction.
 
 ---
 
 ## Table of Contents
 
-1. [Project Architecture](#1-project-architecture)
-2. [Project Structure & File Dependency Mapping](#2-project-structure--file-dependency-mapping)
-3. [Route-by-Route Deep Dive](#3-route-by-route-deep-dive)
-   - [GET /api/v1/welcome](#31-get-apiv1welcome)
-   - [POST /api/v1/data/upload/{project_id}](#32-post-apiv1datauploadproject_id)
-   - [POST /api/v1/data/process/{project_id}](#33-post-apiv1dataprocessproject_id)
-   - [POST /api/v1/nlp/index/push/{project_id}](#34-post-apiv1nlpindexpushproject_id)
-   - [GET /api/v1/nlp/index/info/{project_id}](#35-get-apiv1nlpindexinfoproject_id)
-   - [POST /api/v1/nlp/index/search/{project_id}](#36-post-apiv1nlpindexsearchproject_id)
-   - [POST /api/v1/nlp/index/answer/{project_id}](#37-post-apiv1nlpindexanswerproject_id)
-4. [Function & Class Relationships](#4-function--class-relationships)
-5. [Database Flow & Schema Architecture](#5-database-flow--schema-architecture)
-6. [Vector Search & RAG Flow](#6-vector-search--rag-flow)
-7. [Configuration & Dependency Flow](#7-configuration--dependency-flow)
-8. [Application Startup Lifecycle](#8-application-startup-lifecycle)
-9. [End-to-End Execution Traces](#9-end-to-end-execution-traces)
-10. [Important Design Decisions & Trade-offs](#10-important-design-decisions--trade-offs)
-11. [Developer Navigation Guide](#11-developer-navigation-guide)
+- [1. Developer Learning Notes (Notion)](#1-developer-learning-notes-notion)
+- [2. Project Overview](#2-project-overview)
+- [3. Architecture Overview](#3-architecture-overview)
+- [4. Request / Data Flow](#4-request--data-flow)
+- [5. Asynchronous Processing](#5-asynchronous-processing)
+- [6. Redis Integration](#6-redis-integration)
+- [7. Idempotency & Task Deduplication](#7-idempotency--task-deduplication)
+- [8. RAG Pipeline](#8-rag-pipeline)
+- [9. Vector Database & Semantic Search](#9-vector-database--semantic-search)
+- [10. LLM & Embedding Provider Architecture](#10-llm--embedding-provider-architecture)
+- [11. Services Overview](#11-services-overview)
+- [12. Project Structure](#12-project-structure)
+- [13. API Reference](#13-api-reference)
+- [14. Observability & Monitoring](#14-observability--monitoring)
+- [15. Production Reliability & Fault Tolerance](#15-production-reliability--fault-tolerance)
+- [16. Running the Project](#16-running-the-project)
+- [17. Configuration](#17-configuration)
+- [18. Deep Architecture Documentation](#18-deep-architecture-documentation)
 
 ---
 
-## 1. Project Architecture
+## 1. Developer Learning Notes (Notion)
 
-### Overall Layered Architecture
+Beyond system design and production code, building Mini-RAG involved key trade-offs, performance tuning, and architectural insights around asynchronous queues, idempotency, vector databases, and LLM integrations.
 
-`mini-RAG` follows a strictly layered, decoupled architecture. High-level responsibilities are partitioned into clean software boundaries to guarantee testability, maintainability, and vendor independence.
+Access the complete developer learning notes, key takeaways, and design rationale on Notion:
 
-```
-       +-------------------------------------------------------+
-       |                  HTTP Client / User                   |
-       +-------------------------------------------------------+
-                                   |
-                                   v
-       +-------------------------------------------------------+
-       |               FastAPI App & Routers                   |
-       |  (src/routes/base.py, data.py, nlp.py + Pydantic)     |
-       +-------------------------------------------------------+
-                                   |
-                                   v
-       +-------------------------------------------------------+
-       |                 Controller Layer                      |
-       |  (src/controllers/ Data, Process, Project, NLP)       |
-       +-------------------------------------------------------+
-               /                   |                   \
-              v                    v                    v
-+------------------+     +-------------------+    +--------------------+
-| Repository Model |     | Vector DB Stores  |    |  LLM Provider      |
-| (Project, Asset, |     | (QdrantProvider,  |    | (OpenAIProvider,   |
-|   ChunkModel)    |     | PgVectorProvider) |    |  CohereProvider)   |
-+------------------+     +-------------------+    +--------------------+
-         |                         |                        |
-         v                         v                        v
-+------------------+     +-------------------+    +--------------------+
-| PostgreSQL (Rel) |     | Vector DB Storage |    |  External LLM APIs |
-|  (projects,      |     | (Qdrant Disk /    |    |  (OpenAI / Cohere) |
-| assets, chunks)  |     |  pgvector table)  |    +--------------------+
-+------------------+     +-------------------+
-```
+[![Notion Notes](https://img.shields.io/badge/Notion-Mini--RAG%20Learning%20Notes-000000?style=for-the-badge&logo=notion)](https://app.notion.com/p/mini-rag-notes-3c98ceeb768e80c1b536df7970d4c5dd?source=copy_link)
 
-### Layer Responsibilities
-
-1. **Entrypoint & Lifespan Layer (`src/mini_rag/main.py`)**:
-   - Manages application lifecycle via FastAPI `lifespan` async context manager.
-   - Instantiates database connection pools, LLM provider instances (generation and embedding), vector DB provider instances, and template localization parsers.
-   - Registers sub-routers under `/api/v1`.
-
-2. **Router & Schema Layer (`src/routes/`, `src/routes/schemas/`)**:
-   - Handles incoming HTTP requests and URL parameters.
-   - Enforces payload validation using Pydantic schemas (`ProcessRequest`, `PushRequest`, `SearchRequest`).
-   - Delegates business execution to appropriate controllers.
-   - Translates internal processing signals (`ResponseSignals`) into standard JSON response objects.
-
-3. **Controller / Service Layer (`src/controllers/`)**:
-   - Implements pure domain logic.
-   - `DataController`: Handles file validation (type, max size) and unique path generation.
-   - `ProcessController`: Integrates document loaders (`PyMuPDFLoader`, `TextLoader`) and chunking algorithms (`RecursiveCharacterTextSplitter`).
-   - `NLPController`: Coordinates vector embedding generation, vector database insertion, vector similarity search, context prompt construction, and LLM text generation.
-   - `ProjectController`: Manages project workspace filesystem directory structures.
-
-4. **Data Access / Repository Layer (`src/models/`)**:
-   - Encapsulates database CRUD operations behind asynchronous models (`ProjectModel`, `AssetModel`, `ChunkModel`).
-   - Handles database transaction boundaries using SQLAlchemy `AsyncSession`.
-
-5. **Relational Database Model Layer (`src/models/db_schemas/minirag/schemas/`)**:
-   - Defines declarative SQLAlchemy schema mapping for relational tables (`projects`, `assets`, `chunks`).
-   - Configures foreign key constraints, indexes (`ix_asset_project_id`, `ix_chunk_project_id`, `ix_chunk_asset_id`), and relationship cascades (`delete-orphan`).
-
-6. **Vector DB Provider Abstraction (`src/stores/vectordb/`)**:
-   - Defines unified interface `VectorDBInterface`.
-   - Concrete implementations: `QdrantDBProvider` (embedded local Qdrant engine) and `PgVectorProvider` (PostgreSQL with `pgvector` extension).
-   - Dynamic instantiation via `VectorDBProviderFactory`.
-
-7. **LLM Provider Abstraction (`src/stores/llm/`)**:
-   - Defines unified interface `LLMInterface`.
-   - Concrete implementations: `OpenAIProvider` and `CohereProvider`.
-   - Supports dual model configuration: generation backend/model and embedding backend/model.
-   - Dynamic instantiation via `LLMProviderFactory`.
-
-8. **Prompt Template Engine (`src/stores/llm/templates/`)**:
-   - `TemplateParser`: Loads localized system prompts, document wrappers, and query headers from `locales/en/` or `locales/ar/` using Python `string.Template`.
-
-9. **Configuration Helper (`src/helpers/config.py`)**:
-   - Pydantic Settings class (`Settings`) cached via `@lru_cache()` that parses environment configuration from `.env`.
+👉 📝 [**Read Mini-RAG Learning Notes on Notion**](https://app.notion.com/p/mini-rag-notes-3c98ceeb768e80c1b536df7970d4c5dd?source=copy_link)
 
 ---
 
-## 2. Project Structure & File Dependency Mapping
+## 2. Project Overview
 
-### Complete File Tree
+### What Mini-RAG Is
+Mini-RAG is an enterprise-grade backend system designed to ingest text and PDF documents, chunk them dynamically, extract vector embeddings, store them in high-performance vector databases, and synthesize contextual answers using Large Language Models (LLMs).
 
-```
-src/
-├── controllers/
-│   ├── __init__.py
-│   ├── BaseController.py
-│   ├── DataController.py
-│   ├── NLPController.py
-│   ├── ProcessController.py
-│   └── ProjectController.py
-├── helpers/
-│   ├── __init__.py
-│   └── config.py
-├── mini_rag/
-│   ├── __init__.py
-│   └── main.py
-├── models/
-│   ├── __init__.py
-│   ├── AssetModel.py
-│   ├── BaseDataModel.py
-│   ├── ChunkModel.py
-│   ├── ProjectModel.py
-│   ├── db_schemas/
-│   │   ├── __init__.py
-│   │   └── minirag/
-│   │       ├── __init__.py
-│   │       ├── alembic/
-│   │       │   ├── env.py
-│   │       │   └── versions/
-│   │       │       ├── 5378ab118c04_make_updated_at_nullable.py
-│   │       │       ├── 554daecc6681_change_chunk_text_to_text.py
-│   │       │       └── eccbf472cf4a_initial_commit.py
-│   │       └── schemas/
-│   │           ├── __init__.py
-│   │           ├── asset.py
-│   │           ├── datachunk.py
-│   │           ├── minirag_base.py
-│   │           └── project.py
-│   └── enums/
-│       ├── __init__.py
-│       ├── AssetTypeEnum.py
-│       ├── DataBaseEnum.py
-│       ├── ProcessingEnums.py
-│       └── ResponseEnums.py
-├── routes/
-│   ├── __init__.py
-│   ├── base.py
-│   ├── data.py
-│   ├── nlp.py
-│   └── schemas/
-│       ├── __init__.py
-│       ├── data.py
-│       └── nlp.py
-└── stores/
-    ├── __init__.py
-    ├── llm/
-    │   ├── __init__.py
-    │   ├── LLMEnums.py
-    │   ├── LLMInterface.py
-    │   ├── LLMProviderFactory.py
-    │   ├── providers/
-    │   │   ├── __init__.py
-    │   │   ├── CohereProvider.py
-    │   │   └── OpenAIProvider.py
-    │   └── templates/
-    │       ├── __init__.py
-    │       ├── template_parser.py
-    │       └── locales/
-    │           ├── __init__.py
-    │           ├── ar/
-    │           │   ├── __init__.py
-    │           │   └── rag.py
-    │           └── en/
-    │               ├── __init__.py
-    │               └── rag.py
-    └── vectordb/
-        ├── __init__.py
-        ├── VectorDBEnums.py
-        ├── VectorDBInterface.py
-        ├── VectorDBProviderFactory.py
-        └── providers/
-            ├── __init__.py
-            ├── PgVectorProvider.py
-            └── QdrantDBProvider.py
-```
+### The Problem It Solves
+Traditional RAG backends suffer from critical operational bottlenecks when processing documents:
+1. **Synchronous Ingestion Bottlenecks**: Blocking HTTP request handlers while parsing large PDFs or fetching embeddings leads to client timeouts and thread pool exhaustion.
+2. **Duplicate Ingestion Risks**: Worker restarts or transient API failures cause repetitive, costly embedding generation and database duplication.
+3. **Vendor Lock-in**: Tight coupling to single vector databases or LLM APIs prevents seamless infrastructure migration.
 
-### Detailed File Analysis Table
+Mini-RAG resolves these issues by decoupling HTTP request handling from background processing, enforcing strict SHA-256 task idempotency, and providing abstract factory interfaces for vector databases and LLM backends.
 
-| File Path | Responsibility | Depends On | Dependents | Flow Position |
-| :--- | :--- | :--- | :--- | :--- |
-| [`src/mini_rag/main.py`](file:///home/ahmed/projects/mini-rag/src/mini_rag/main.py) | Application entrypoint, FastAPI instance creation, lifespan state management. | `helpers.config`, `stores.llm`, `stores.vectordb`, `routes.*` | Uvicorn / Server launcher | Bootstrap / Lifecycle |
-| [`src/helpers/config.py`](file:///home/ahmed/projects/mini-rag/src/helpers/config.py) | Loads `.env` parameters into cached Pydantic `Settings`. | `pydantic_settings` | `main.py`, `BaseController`, `BaseDataModel`, `VectorDBProviderFactory`, `LLMProviderFactory` | Configuration |
-| [`src/routes/base.py`](file:///home/ahmed/projects/mini-rag/src/routes/base.py) | Welcome route (`GET /api/v1/welcome`). | `helpers.config` | `main.py` | API Route |
-| [`src/routes/data.py`](file:///home/ahmed/projects/mini-rag/src/routes/data.py) | Handles `/data/upload/{project_id}` and `/data/process/{project_id}` endpoints. | `controllers.DataController`, `ProcessController`, `models.*`, `routes.schemas.data` | `main.py` | API Route |
-| [`src/routes/nlp.py`](file:///home/ahmed/projects/mini-rag/src/routes/nlp.py) | Handles `/nlp/index/push`, `/nlp/index/info`, `/nlp/index/search`, `/nlp/index/answer`. | `controllers.NLPController`, `models.*`, `routes.schemas.nlp` | `main.py` | API Route |
-| [`src/controllers/BaseController.py`](file:///home/ahmed/projects/mini-rag/src/controllers/BaseController.py) | Base class for controllers; sets up base directory paths and helper utilities. | `helpers.config` | `DataController`, `ProcessController`, `ProjectController`, `NLPController` | Controller Base |
-| [`src/controllers/DataController.py`](file:///home/ahmed/projects/mini-rag/src/controllers/DataController.py) | Validates file extensions/sizes and generates unique target file paths. | `BaseController`, `ProjectController`, `models.enums` | `routes/data.py` | Controller |
-| [`src/controllers/ProcessController.py`](file:///home/ahmed/projects/mini-rag/src/controllers/ProcessController.py) | Uses PyMuPDF / Text loaders and text splitters to split raw files into chunks. | `BaseController`, `ProjectController`, `langchain_community`, `langchain_text_splitters` | `routes/data.py` | Controller |
-| [`src/controllers/ProjectController.py`](file:///home/ahmed/projects/mini-rag/src/controllers/ProjectController.py) | Manages project workspace directories in `assets/files/{project_id}`. | `BaseController` | `DataController`, `ProcessController` | Controller |
-| [`src/controllers/NLPController.py`](file:///home/ahmed/projects/mini-rag/src/controllers/NLPController.py) | Executes embedding generation, vector DB index push, search, prompt parsing, and RAG answering. | `BaseController`, `models.db_schemas`, `stores.llm`, `stores.vectordb` | `routes/nlp.py` | Controller |
-| [`src/models/BaseDataModel.py`](file:///home/ahmed/projects/mini-rag/src/models/BaseDataModel.py) | Base data access repository class holding reference to `db_client`. | `helpers.config` | `ProjectModel`, `AssetModel`, `ChunkModel` | Model Repository Base |
-| [`src/models/ProjectModel.py`](file:///home/ahmed/projects/mini-rag/src/models/ProjectModel.py) | Database operations for `Project` entity (`get_project_or_create_one`, `create_project`). | `BaseDataModel`, `models.db_schemas.Project` | `routes/data.py`, `routes/nlp.py` | Model Repository |
-| [`src/models/AssetModel.py`](file:///home/ahmed/projects/mini-rag/src/models/AssetModel.py) | Database operations for `Asset` entity (`create_asset`, `get_assets_by_project_id`, `get_asset_record`). | `BaseDataModel`, `models.db_schemas.Asset` | `routes/data.py` | Model Repository |
-| [`src/models/ChunkModel.py`](file:///home/ahmed/projects/mini-rag/src/models/ChunkModel.py) | Database operations for `DataChunk` entity (`insert_many_chunks`, `get_chunks_by_project_id`, `delete_chunks_by_project_id`). | `BaseDataModel`, `models.db_schemas.DataChunk` | `routes/data.py`, `routes/nlp.py` | Model Repository |
-| [`src/models/db_schemas/minirag/schemas/minirag_base.py`](file:///home/ahmed/projects/mini-rag/src/models/db_schemas/minirag/schemas/minirag_base.py) | Creates `SQLAlchemyBase = declarative_base()`. | `sqlalchemy.ext.declarative` | `project.py`, `asset.py`, `datachunk.py` | Database Schema Base |
-| [`src/models/db_schemas/minirag/schemas/project.py`](file:///home/ahmed/projects/mini-rag/src/models/db_schemas/minirag/schemas/project.py) | SQLAlchemy model for `projects` table. | `minirag_base.py` | `ProjectModel`, `Asset`, `DataChunk` | Relational Entity |
-| [`src/models/db_schemas/minirag/schemas/asset.py`](file:///home/ahmed/projects/mini-rag/src/models/db_schemas/minirag/schemas/asset.py) | SQLAlchemy model for `assets` table. | `minirag_base.py`, `project.py` | `AssetModel`, `DataChunk` | Relational Entity |
-| [`src/models/db_schemas/minirag/schemas/datachunk.py`](file:///home/ahmed/projects/mini-rag/src/models/db_schemas/minirag/schemas/datachunk.py) | SQLAlchemy model for `chunks` table + Pydantic `RetrievedDocument`. | `minirag_base.py`, `project.py`, `asset.py` | `ChunkModel`, `NLPController` | Relational Entity |
-| [`src/stores/vectordb/VectorDBInterface.py`](file:///home/ahmed/projects/mini-rag/src/stores/vectordb/VectorDBInterface.py) | Abstract Base Class defining vector DB provider operations. | `abc` | `QdrantDBProvider`, `PgVectorProvider` | Abstract Store Interface |
-| [`src/stores/vectordb/VectorDBProviderFactory.py`](file:///home/ahmed/projects/mini-rag/src/stores/vectordb/VectorDBProviderFactory.py) | Factory returning configured `VectorDBInterface` instance (`qdrant` / `pgvector`). | `QdrantDBProvider`, `PgVectorProvider`, `VectorDBEnums` | `main.py` | Store Factory |
-| [`src/stores/vectordb/providers/QdrantDBProvider.py`](file:///home/ahmed/projects/mini-rag/src/stores/vectordb/providers/QdrantDBProvider.py) | Qdrant vector database provider using `qdrant_client`. | `VectorDBInterface`, `qdrant_client` | `VectorDBProviderFactory` | Concrete Store Provider |
-| [`src/stores/vectordb/providers/PgVectorProvider.py`](file:///home/ahmed/projects/mini-rag/src/stores/vectordb/providers/PgVectorProvider.py) | PostgreSQL `pgvector` provider executing vector SQL queries (`<=>`, `<->`, `<#>`). | `VectorDBInterface`, `sqlalchemy` | `VectorDBProviderFactory` | Concrete Store Provider |
-| [`src/stores/llm/LLMInterface.py`](file:///home/ahmed/projects/mini-rag/src/stores/llm/LLMInterface.py) | Abstract Base Class defining LLM generation and embedding operations. | `abc` | `OpenAIProvider`, `CohereProvider` | Abstract Store Interface |
-| [`src/stores/llm/LLMProviderFactory.py`](file:///home/ahmed/projects/mini-rag/src/stores/llm/LLMProviderFactory.py) | Factory returning configured `LLMInterface` instance (`openai` / `cohere`). | `OpenAIProvider`, `CohereProvider`, `LLMEnums` | `main.py` | Store Factory |
-| [`src/stores/llm/providers/OpenAIProvider.py`](file:///home/ahmed/projects/mini-rag/src/stores/llm/providers/OpenAIProvider.py) | OpenAI implementation for chat generation (`gpt-4o-mini`) and embeddings (`text-embedding-3-small`). | `LLMInterface`, `openai` | `LLMProviderFactory` | Concrete Store Provider |
-| [`src/stores/llm/providers/CohereProvider.py`](file:///home/ahmed/projects/mini-rag/src/stores/llm/providers/CohereProvider.py) | Cohere implementation for chat generation (`command-r-plus`) and embeddings (`embed-multilingual-v3.0`). | `LLMInterface`, `cohere` | `LLMProviderFactory` | Concrete Store Provider |
-| [`src/stores/llm/templates/template_parser.py`](file:///home/ahmed/projects/mini-rag/src/stores/llm/templates/template_parser.py) | Dynamically imports localized string templates (`en`, `ar`). | Python `__import__` module | `main.py`, `NLPController` | Prompt Engine |
+### Key Features
+- **Asynchronous Task Queue**: Offloads text extraction, chunking, and embedding generation to distributed Celery workers backed by RabbitMQ.
+- **SHA-256 Idempotency Engine**: `IdempotencyManager` hashes task signatures to prevent duplicate task execution and redundant vendor API costs.
+- **Pluggable Vector DB Factory**: Seamless switching between **Qdrant** and **PgVector** via configuration.
+- **Pluggable LLM/Embedding Factory**: Unified interfaces for **OpenAI** and **Cohere** for generation and vector embeddings.
+- **Multi-Lingual Template Engine**: Localization-aware RAG prompt templates (supporting English and Arabic).
+- **Full Observability Stack**: Built-in Prometheus metrics middleware, Grafana dashboards, Node Exporter, Postgres Exporter, and Celery Flower monitoring.
+
+### Main Technologies Used
+- **Core App**: Python 3.12+, FastAPI, Pydantic V2
+- **Database & ORM**: PostgreSQL, PgVector, SQLAlchemy 2.0 (Async), Alembic
+- **Task Queue & Caching**: Celery, RabbitMQ (AMQP Broker), Redis (Result Backend & Caching)
+- **Vector Engine**: Qdrant, PgVector
+- **LLM / Embedding Providers**: OpenAI API, Cohere API
+- **Monitoring & Metrics**: Prometheus, Grafana, Flower, Node Exporter, Postgres Exporter
+- **Web Server & Containerization**: Nginx, Docker, Docker Compose, `uv`
 
 ---
 
-## 3. Route-by-Route Deep Dive
+## 3. Architecture Overview
 
-### 3.1. GET /api/v1/welcome
+Mini-RAG uses a decoupled multi-layer architecture split into HTTP Routing, Controller Orchestration, Asynchronous Task Execution, Data & Vector Storage, AI Providers, and Infrastructure Monitoring.
 
-- **HTTP Method & Path**: `GET /api/v1/welcome`
-- **Responsibility**: Health-check / greeting endpoint returning application metadata.
-- **Request Flow**:
-  1. FastAPI routes request to `welcome_message` function in `src/routes/base.py`.
-  2. Injects `Settings` dependency using `Depends(get_settings)`.
-  3. Extracts `APP_NAME` and `APP_VERSION` from settings.
-  4. Returns JSON message response.
+```mermaid
+graph TD
+
+    User([HTTP Client / Frontend]) -->|HTTP| Nginx[Nginx Reverse Proxy]
+
+    Nginx -->|Proxy :8000| FastAPI[FastAPI Web Server]
+
+    subgraph Application["Application Core"]
+        FastAPI --> Routes[API Routes]
+        Routes --> Controllers[Controllers]
+        Controllers --> Idempotency[IdempotencyManager]
+    end
+
+    subgraph Async["Asynchronous Workflow"]
+        Controllers -->|Dispatch Tasks| Celery[Celery App]
+        Celery -->|AMQP| RabbitMQ[RabbitMQ Broker]
+        RabbitMQ --> Worker[Celery Worker]
+        Worker -->|Task Results| Redis[(Redis)]
+        Worker -->|Execution Status| Idempotency
+    end
+
+    subgraph Storage["Data & Vector Storage"]
+        Controllers -->|Queries| PostgreSQL[(PostgreSQL + pgvector)]
+        Worker -->|Write Data| PostgreSQL
+        Worker -->|Store Embeddings| Qdrant[(Qdrant)]
+        Controllers -->|Vector Search| Qdrant
+    end
+
+    subgraph AI["AI Providers"]
+        Controllers --> ProviderFactory[LLM Provider Factory]
+        Worker --> ProviderFactory
+        ProviderFactory --> OpenAI[OpenAI API]
+        ProviderFactory --> Cohere[Cohere API]
+    end
+
+    subgraph Observability["Observability"]
+        FastAPI -.->|Metrics| Prometheus[Prometheus]
+        NodeExporter[Node Exporter] --> Prometheus
+        PostgresExporter[Postgres Exporter] --> Prometheus
+        Prometheus --> Grafana[Grafana]
+        Worker -.-> Flower[Celery Flower]
+        RabbitMQ -.-> Flower
+    end
+```
+
+---
+
+## 4. Request / Data Flow
+
+Mini-RAG segregates requests into **Synchronous Query Workflows** (instant vector search and response generation) and **Asynchronous ETL Workflows** (file ingestion, chunking, and embedding generation).
+
+### Synchronous RAG Search & Generation Flow
 
 ```mermaid
 sequenceDiagram
     autonumber
     actor Client
-    participant Router as routes/base.py
-    participant Config as helpers/config.py
+    participant API as FastAPI Router
+    participant NLP as NLPController
+    participant LLM as LLMProviderFactory
+    participant VDB as VectorDBProviderFactory
+    participant DB as PostgreSQL
+
+    Client->>API: POST /api/v1/nlp/index/answer/{project_id}
+    API->>NLP: answer_project_question(project_id, search_request)
+    NLP->>DB: Fetch Project Metadata
+    NLP->>LLM: Generate Embedding for Query String
+    LLM-->>NLP: Query Vector Array
+    NLP->>VDB: Search Top-K Vector Distance (Cosine / Dot / Euclidean)
+    VDB-->>NLP: Relevant Document Chunks + Similarity Scores
+    NLP->>LLM: Render Template & Call Chat Completion API
+    LLM-->>NLP: Synthesized Answer Text
+    NLP-->>API: Response Model (answer, prompt, retrieved_chunks)
+    API-->>Client: HTTP 200 OK Response
+```
+
+### Asynchronous Data Ingestion & Processing Flow
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Client
+    participant API as FastAPI Router
+    participant Controller as DataController / ProcessController
+    participant Idem as IdempotencyManager
+    participant Celery as Celery Producer
+    participant Broker as RabbitMQ Broker
+    participant Worker as Celery Worker
+    participant DB as PostgreSQL / Vector DB
+
+    Client->>API: POST /api/v1/data/process/{project_id}
+    API->>Controller: process_project_files(project_id)
+    Controller->>Idem: create_task_record("process_project_files", args)
+    Idem->>DB: Insert CeleryTaskExecution (Status: PENDING)
+    Controller->>Celery: dispatch_task.delay(project_id)
+    Celery->>Broker: Publish AMQP Message to file_processing_queue
+    Controller-->>API: Task Submission Accepted
+    API-->>Client: HTTP 200 OK (task_id, execution_id)
     
-    Client->>Router: GET /api/v1/welcome
-    Router->>Config: get_settings()
-    Config-->>Router: Returns Settings instance
-    Router-->>Client: 200 OK {"message": "Welcome to mini-RAG! This is version 0.1."}
+    Broker->>Worker: Deliver Task Message
+    Worker->>Idem: should_execute_task(task_name, args_hash)
+    Worker->>Worker: Parse Files -> Extract Text -> Split Chunks -> Embed
+    Worker->>DB: Save Data Chunks & Vector Embeddings
+    Worker->>Idem: update_task_record(execution_id, status="SUCCESS")
 ```
 
 ---
 
-### 3.2. POST /api/v1/data/upload/{project_id}
+## 5. Asynchronous Processing
 
-- **HTTP Method & Path**: `POST /api/v1/data/upload/{project_id}`
-- **Responsibility**: Uploads a single raw document (PDF or TXT) for a specified project, saves it to disk under `src/assets/files/{project_id}/`, and registers an `Asset` record in PostgreSQL.
-- **Request Flow**:
-  1. `routes/data.py` receives request containing `project_id` (path parameter) and `file` (`UploadFile`).
-  2. `ProjectModel.create_instance(request.app.state.db_client)` initializes repository.
-  3. Calls `project_model.get_project_or_create_one(project_id)`. If project doesn't exist, inserts new `Project` record into PostgreSQL.
-  4. Instantiates `DataController()`.
-  5. Calls `data_controller.validate_uplaoded_file(file)`. Checks `file.size` against `FILE_MAX_SIZE` (converted to MB) and `file.content_type` against `FILE_ALLOWED_TYPES`. If invalid, returns `400 Bad Request`.
-  6. Calls `data_controller.generate_unique_filepath(file.filename, project_id)`. Sanitizes filename via regex `re.sub(r'[^a-zA-Z0-9_.-]', '_', filename)` and prepends 12-character random string key. Ensures directory `src/assets/files/{project_id}` exists via `ProjectController`.
-  7. Reads file asynchronously in chunks of `app_settings.FILE_DEFAULT_CHUNK_SIZE` and writes to disk via `aiofiles.open()`.
-  8. Instantiates `AssetModel` repository and saves `Asset` record to PostgreSQL with fields: `asset_project_id`, `asset_type='file'`, `asset_name=file_id`, `asset_size`.
-  9. Returns `200 OK` with JSON containing `file_id` (the generated database asset ID).
+### Why Celery is Used
+Document ETL operations (parsing large PDF files, clean text extraction, text chunking, and network calls to external embedding APIs) are resource-intensive and unpredictable in latency. Running these directly within FastAPI request threads causes HTTP timeouts, blocks worker loops, and degrades user experience. Celery offloads these heavy computational loads to background worker processes.
 
-```mermaid
-sequenceDiagram
-    autonumber
-    actor Client
-    participant Router as routes/data.py
-    participant ProjModel as models/ProjectModel.py
-    participant DataCtrl as controllers/DataController.py
-    participant ProjCtrl as controllers/ProjectController.py
-    participant Disk as Local Filesystem
-    participant AssetModel as models/AssetModel.py
-    participant DB as PostgreSQL DB
+### Message Broker (RabbitMQ)
+**RabbitMQ** serves as the primary AMQP message broker. It receives task payloads from FastAPI producers and routes them into durable AMQP queues. 
 
-    Client->>Router: POST /api/v1/data/upload/1 (Multipart file)
-    Router->>ProjModel: get_project_or_create_one(project_id=1)
-    ProjModel->>DB: SELECT / INSERT Project(project_id=1)
-    DB-->>ProjModel: Return Project instance
-    Router->>DataCtrl: validate_uplaoded_file(file)
-    DataCtrl-->>Router: (True, FILE_VALIDATION_SUCCESS)
-    Router->>DataCtrl: generate_unique_filepath(filename, project_id=1)
-    DataCtrl->>ProjCtrl: get_project_directory_path(1)
-    ProjCtrl-->>DataCtrl: Returns 'src/assets/files/1'
-    DataCtrl-->>Router: Returns (new_file_path, new_filename)
-    Router->>Disk: Async write file chunks via aiofiles
-    Disk-->>Router: File saved successfully
-    Router->>AssetModel: create_asset(Asset(...))
-    AssetModel->>DB: INSERT INTO assets ...
-    DB-->>AssetModel: Asset record created
-    Router-->>Client: 200 OK {"message": "...", "file_id": "1"}
+Dedicated queue routing configured in `celery_app.py`:
+- `file_processing_queue`: Handles document parsing, file reads, and content extraction (`process_project_files`, `process_and_push_data_to_vector_db`).
+- `data_indexing_queue`: Handles chunking and embedding push tasks (`index_data_content`).
+- `default`: Handles general background and beat maintenance tasks (`clean_celery_executions_table`).
+
+### Task Chains & Workflows
+Mini-RAG uses Celery signatures and chains to coordinate multi-stage background processes. In `ProcessController.py`, file processing and vector database indexing are chained sequentially:
+
+```python
+# Task Chain: Process Files -> Push Embeddings to Vector DB
+task_chain = chain(
+    process_project_files.s(project_id=project_id),
+    process_and_push_data_to_vector_db.s(project_id=project_id)
+)
 ```
 
----
+### Worker Acknowledgements (`acks_late`)
+To prevent data loss during worker failures, Mini-RAG enforces late task acknowledgements:
+```python
+task_acks_late = True
+```
+Under `task_acks_late`, a worker acknowledges a message back to RabbitMQ **only after** the task execution finishes. If a worker process crashes or loses connection mid-execution, RabbitMQ detects the channel closure and re-queues the message for another worker.
 
-### 3.3. POST /api/v1/data/process/{project_id}
-
-- **HTTP Method & Path**: `POST /api/v1/data/process/{project_id}`
-- **Responsibility**: Loads uploaded file(s) for a project from disk, parses text contents via LangChain document loaders (`PyMuPDFLoader` / `TextLoader`), splits text into overlapping chunks (`RecursiveCharacterTextSplitter`), and stores chunks into PostgreSQL (`chunks` table).
-- **Request Flow**:
-  1. `routes/data.py` receives path variable `project_id` and JSON payload matching `ProcessRequest` schema (`file_id`, `chunk_size`, `overlap_size`, `do_reset`).
-  2. Fetches `Project` record from DB via `ProjectModel`.
-  3. Queries `AssetModel` for file asset records. If `process_request.file_id` is supplied, fetches specific file record; otherwise, fetches all file assets for `project_id`.
-  4. If `do_reset` is `True`, calls `chunk_model.delete_chunks_by_project_id(project_id)` to drop existing DB chunks.
-  5. Instantiates `ProcessController(project_id)`.
-  6. Iterates over target files:
-     a. Calls `process_controller.get_file_content(file_id)`. Checks extension: `.txt` instantiates `TextLoader(encoding="utf-8")`, `.pdf` instantiates `PyMuPDFLoader(file_path)`. Loads documents.
-     b. Calls `process_controller.process_file_content(documents, file_id, chunk_size, overlap_size)`. Creates `RecursiveCharacterTextSplitter` and splits raw documents into chunks.
-     c. Maps chunks into `DataChunk` SQLAlchemy schema instances (`chunk_text`, `chunk_metadata`, `chunk_order`, `chunk_project_id`, `chunk_asset_id`).
-     d. Calls `chunk_model.insert_many_chunks(file_chunks_records, bulk_size=100)`. Bulk-inserts chunks into PostgreSQL.
-  7. Returns `200 OK` with count of processed files and inserted chunks.
+### Celery Processing Architecture Diagram
 
 ```mermaid
-sequenceDiagram
-    autonumber
-    actor Client
-    participant Router as routes/data.py
-    participant AssetModel as models/AssetModel.py
-    participant ChunkModel as models/ChunkModel.py
-    participant ProcCtrl as controllers/ProcessController.py
-    participant Loader as LangChain Loader
-    participant Splitter as RecursiveCharacterTextSplitter
-    participant DB as PostgreSQL DB
-
-    Client->>Router: POST /api/v1/data/process/1 (ProcessRequest payload)
-    Router->>AssetModel: get_assets_by_project_id(project_id=1)
-    AssetModel->>DB: SELECT * FROM assets WHERE asset_project_id = 1
-    DB-->>AssetModel: Returns list of Asset records
-    opt do_reset == 1
-        Router->>ChunkModel: delete_chunks_by_project_id(1)
-        ChunkModel->>DB: DELETE FROM chunks WHERE chunk_project_id = 1
+flowchart LR
+    Client([HTTP Client]) -->|Submit Processing Request| FastAPI[FastAPI App]
+    FastAPI -->|1. Register Task Record| Idem[(Idempotency DB)]
+    FastAPI -->|2. Dispatch Task| CeleryClient[Celery Producer]
+    CeleryClient -->|3. Publish AMQP Message| RabbitMQ{RabbitMQ Broker}
+    
+    subgraph RabbitMQ Queues
+        RabbitMQ --> Queue1[file_processing_queue]
+        RabbitMQ --> Queue2[data_indexing_queue]
+        RabbitMQ --> Queue3[default]
     end
-    loop For each Asset
-        Router->>ProcCtrl: get_file_content(file_id)
-        ProcCtrl->>Loader: load() (PyMuPDF / Text)
-        Loader-->>ProcCtrl: Returns raw Document objects
-        Router->>ProcCtrl: process_file_content(documents, file_id, chunk_size, overlap_size)
-        ProcCtrl->>Splitter: create_documents()
-        Splitter-->>ProcCtrl: Returns split text chunks
-        Router->>ChunkModel: insert_many_chunks(file_chunks_records)
-        ChunkModel->>DB: INSERT INTO chunks (bulk add_all)
-    end
-    Router-->>Client: 200 OK {"message": "...", "num_chunks_inserted": 42, "num_files_processed": 1}
+    
+    Queue1 -->|Consume| Worker1[Celery Worker Node 1]
+    Queue2 -->|Consume| Worker2[Celery Worker Node 2]
+    
+    Worker1 -->|4. Verify Execution & Hash| Idem
+    Worker1 -->|5. Store Task Results| Redis[(Redis Result Backend)]
+    Worker1 -->|6. Persist Chunks & Vectors| VectorDB[(PgVector / Qdrant)]
 ```
 
 ---
 
-### 3.4. POST /api/v1/nlp/index/push/{project_id}
+## 6. Redis Integration
 
-- **HTTP Method & Path**: `POST /api/v1/nlp/index/push/{project_id}`
-- **Responsibility**: Reads text chunks from PostgreSQL for a project, generates vector embeddings for each chunk via the configured LLM embedding backend (`app.state.embedding_client`), and indexes vector points into the vector database (`app.state.vector_db_client`).
-- **Request Flow**:
-  1. `routes/nlp.py` receives request containing `project_id` and `PushRequest` payload (`do_reset`).
-  2. Fetches `Project` entity from DB via `ProjectModel`. Returns `404` if not found.
-  3. Instantiates `NLPController` with injected app states: `vector_db_client`, `embedding_client`, `generation_client`, `template_parser`.
-  4. Queries total chunk count via `chunk_model.get_chunks_count_by_project_id(project_id)`. Returns `404` if 0 chunks found.
-  5. Iterates through database chunks in pages of 50 using `chunk_model.get_chunks_by_project_id(page_number, page_size=50)`.
-  6. Calls `nlp_controller.index_into_vector_db(project, data_chunks, do_reset)`:
-     a. Formats collection name as `collection_{project_id}`.
-     b. If `do_reset=True` on first batch, deletes existing vector collection via `vectordb_client.delete_collection()`.
-     c. Calls `embedding_client.generate_embedding(chunk_text)` for each chunk.
-     d. Generates unique UUID strings (`uuid4()`) for each vector point.
-     e. Ensures collection exists via `vectordb_client.create_collection(collection_name, vector_dimension)`.
-     f. Executes batch vector insert via `vectordb_client.insert_many(collection_name, texts, vector_ids, vectors, metadata_list)`.
-  7. Returns `200 OK` with `inserted_count`.
+### Role of Redis in Mini-RAG
+**Redis** is configured as the **Celery Result Backend** (`CELERY_RESULT_BACKEND`). It provides high-speed in-memory state tracking for task statuses and execution return values.
+
+### Key Redis Responsibilities
+1. **Result Storage**: Stores return values and exception backtraces of Celery tasks.
+2. **Result Expiration**: Task results automatically expire after 1 hour (`result_expires = 3600`) to prevent memory leaks.
+3. **Health Checking**: Probed via `redis-cli ping` health checks in Docker Compose.
 
 ```mermaid
-sequenceDiagram
-    autonumber
-    actor Client
-    participant Router as routes/nlp.py
-    participant ChunkModel as models/ChunkModel.py
-    participant NLPCtrl as controllers/NLPController.py
-    participant LLM as app.state.embedding_client
-    participant VectorDB as app.state.vector_db_client
-    participant DB as PostgreSQL DB
-
-    Client->>Router: POST /api/v1/nlp/index/push/1 (PushRequest payload)
-    Router->>ChunkModel: get_chunks_count_by_project_id(1)
-    ChunkModel->>DB: SELECT COUNT(*) FROM chunks WHERE chunk_project_id = 1
-    DB-->>ChunkModel: Returns total count (e.g. 150)
-    loop For page in range(1, total_pages)
-        Router->>ChunkModel: get_chunks_by_project_id(1, page_number, page_size=50)
-        ChunkModel->>DB: SELECT * FROM chunks OFFSET ... LIMIT 50
-        DB-->>ChunkModel: Returns 50 DataChunk records
-        Router->>NLPCtrl: index_into_vector_db(project, data_chunks, do_reset)
-        loop For each DataChunk
-            NLPCtrl->>LLM: generate_embedding(chunk_text)
-            LLM-->>NLPCtrl: Returns float vector list [0.012, -0.043, ...]
-        end
-        NLPCtrl->>VectorDB: create_collection("collection_1", dimension)
-        NLPCtrl->>VectorDB: insert_many("collection_1", texts, vector_ids, vectors, metadata_list)
-        VectorDB-->>NLPCtrl: Returns True
-    end
-    Router-->>Client: 200 OK {"message": "...", "inserted_count": 150}
+graph TD
+    Worker[Celery Worker] -->|Set Task Result / State| Redis[(Redis Key-Value Store)]
+    FastAPI[FastAPI Controller] -->|Fetch Task Status by ID| Redis
+    RedisBeat[Celery Beat Schedule] -->|Track Periodic Schedules| Redis
 ```
 
 ---
 
-### 3.5. GET /api/v1/nlp/index/info/{project_id}
+## 7. Idempotency & Task Deduplication
 
-- **HTTP Method & Path**: `GET /api/v1/nlp/index/info/{project_id}`
-- **Responsibility**: Retrieves structural and statistical information regarding a project's vector database collection.
-- **Request Flow**:
-  1. Router verifies project existence via `ProjectModel`.
-  2. Instantiates `NLPController`.
-  3. Calls `nlp_controller.get_vector_db_collection_info(project)`.
-  4. Calls `vectordb_client.get_collection_info("collection_{project_id}")`.
-  5. Returns `200 OK` containing raw vector collection dictionary schema (status, vectors count, point counts, storage configurations).
+### Why Idempotency is Crucial
+In distributed asynchronous systems, client retries, network blips, or worker restarts can cause the same task payload to be enqueued multiple times. Executing document chunking or vector embedding generation twice causes:
+- Duplicate chunk records in PostgreSQL/PgVector.
+- Duplicate vector points in Qdrant.
+- Unnecessary financial costs from repeated LLM embedding API calls.
+
+### How `IdempotencyManager` Works
+Mini-RAG implements a custom database-backed `IdempotencyManager` (`src/utils/IdempotencyManager.py`).
+
+1. **SHA-256 Task Argument Hashing**: Task arguments and the task name are combined into a canonical JSON object with sorted keys and hashed via SHA-256 (`create_args_hash`).
+2. **Database Tracking (`CeleryTaskExecution`)**: Each task execution corresponds to a row in PostgreSQL storing `task_name`, `celery_task_id`, `status`, `task_args`, `task_args_hash`, `started_at`, `ended_at`, and `result`.
+3. **Pre-Execution Check (`should_execute_task`)**: Before executing business logic, the worker checks `CeleryTaskExecution`:
+   - If status is `SUCCESS`: Skip execution completely and return cached results.
+   - If status is `PENDING` or `STARTED` (and within time limit `600s + 60s` gap): Skip duplicate execution.
+   - If status is `FAILURE` or lock expired: Re-execute task.
+
+### Task Lifecycle Flowchart
 
 ```mermaid
-sequenceDiagram
-    autonumber
-    actor Client
-    participant Router as routes/nlp.py
-    participant NLPCtrl as controllers/NLPController.py
-    participant VectorDB as app.state.vector_db_client
-
-    Client->>Router: GET /api/v1/nlp/index/info/1
-    Router->>NLPCtrl: get_vector_db_collection_info(project)
-    NLPCtrl->>VectorDB: get_collection_info("collection_1")
-    VectorDB-->>NLPCtrl: Returns collection metadata dict
-    NLPCtrl-->>Router: Returns info dict
-    Router-->>Client: 200 OK {"message": "...", "index_info": {...}}
+flowchart TD
+    Start([Task Execution Request]) --> Hash[Generate SHA-256 Hash of task_name + task_args]
+    Hash --> QueryDB[Query CeleryTaskExecution Table]
+    QueryDB --> RecordExists{Record Exists?}
+    
+    RecordExists -- No --> CreateRec[Create Record: PENDING]
+    CreateRec --> RunTask[Execute Worker Logic]
+    
+    RecordExists -- Yes --> CheckStatus{Check Task Status}
+    CheckStatus -- SUCCESS --> Reuse[Skip Execution & Return Existing Record]
+    CheckStatus -- PENDING / STARTED --> CheckTime{Time Elapsed < Time Limit?}
+    CheckTime -- Yes --> Skip[Skip Execution - Task Currently Running]
+    CheckTime -- No --> RunTask
+    CheckStatus -- FAILURE --> RunTask
+    
+    RunTask --> TaskResult{Task Succeeded?}
+    TaskResult -- Yes --> MarkSuccess[Update Status: SUCCESS + ended_at]
+    TaskResult -- No --> MarkFail[Update Status: FAILURE + error log]
+    MarkSuccess --> End([Finished])
+    MarkFail --> End
 ```
 
 ---
 
-### 3.6. POST /api/v1/nlp/index/search/{project_id}
+## 8. RAG Pipeline
 
-- **HTTP Method & Path**: `POST /api/v1/nlp/index/search/{project_id}`
-- **Responsibility**: Converts a raw text query string into a vector embedding and executes semantic vector similarity search against the project's vector collection.
-- **Request Flow**:
-  1. Router receives path variable `project_id` and JSON payload `SearchRequest` (`text`, `top_k`).
-  2. Verifies project existence via `ProjectModel`.
-  3. Instantiates `NLPController`.
-  4. Calls `nlp_controller.search_in_vector_db(project, query_text, top_k)`:
-     a. Converts query text to embedding vector via `embedding_client.generate_embedding(query_text, document_type="query")`.
-     b. Calls `vectordb_client.search_by_vector("collection_{project_id}", query_vector, top_k=top_k)`.
-     c. Provider executes similarity metric (Cosine, Dot Product, or Euclidean Distance) and returns top `top_k` matches as `List[RetrievedDocument]`.
-  5. Returns `200 OK` with JSON array of matching documents containing `text` and similarity `score`.
+Mini-RAG implements an end-to-end Retrieval-Augmented Generation lifecycle.
 
 ```mermaid
-sequenceDiagram
-    autonumber
-    actor Client
-    participant Router as routes/nlp.py
-    participant NLPCtrl as controllers/NLPController.py
-    participant EmbedLLM as app.state.embedding_client
-    participant VectorDB as app.state.vector_db_client
-
-    Client->>Router: POST /api/v1/nlp/index/search/1 {"text": "battery life", "top_k": 3}
-    Router->>NLPCtrl: search_in_vector_db(project, "battery life", top_k=3)
-    NLPCtrl->>EmbedLLM: generate_embedding("battery life", document_type="query")
-    EmbedLLM-->>NLPCtrl: Returns query float vector
-    NLPCtrl->>VectorDB: search_by_vector("collection_1", query_vector, top_k=3)
-    VectorDB-->>NLPCtrl: Returns List[RetrievedDocument(text=..., score=...)]
-    NLPCtrl-->>Router: Returns search_results
-    Router-->>Client: 200 OK {"message": "...", "results": [{"text": "...", "score": 0.89}]}
+flowchart TD
+    Doc[Document Upload: PDF / TXT] -->|Extract Raw Text| Extract[Text Extraction Engine]
+    Extract -->|Character / Token Splitting| Chunk[Text Chunking & Cleaning]
+    Chunk -->|Generate Vector Representation| Embed[LLM Embedding Client: OpenAI / Cohere]
+    Embed -->|Store Vectors & Metadata| VDB[(Vector Database: Qdrant / PgVector)]
+    
+    UserQuery([User Question]) -->|Generate Query Vector| EmbedQuery[LLM Embedding Client]
+    EmbedQuery -->|Cosine / Dot / Euclidean Search| VDB
+    VDB -->|Retrieve Top-K Context Chunks| Context[Context Aggregator]
+    
+    Context -->|Parse Localization Template| Template[TemplateParser en/ar]
+    Template -->|Augmented System Prompt| LLM[LLM Generation Client: OpenAI / Cohere]
+    LLM -->|Synthesized Contextual Response| Answer([Final Answer to Client])
 ```
 
 ---
 
-### 3.7. POST /api/v1/nlp/index/answer/{project_id}
+## 9. Vector Database & Semantic Search
 
-- **HTTP Method & Path**: `POST /api/v1/nlp/index/answer/{project_id}`
-- **Responsibility**: Complete RAG pipeline: retrieves top matching text chunks for a query, builds a localized augmented prompt using system and document template parsers, and synthesizes a final response using the generation LLM.
-- **Request Flow**:
-  1. Router receives path variable `project_id` and JSON payload `SearchRequest` (`text`, `top_k`).
-  2. Verifies project existence via `ProjectModel`.
-  3. Instantiates `NLPController`.
-  4. Calls `nlp_controller.answer_rag_query(project, query_text, top_k)`:
-     a. Executes vector similarity search via `self.search_in_vector_db(...)` to get relevant `RetrievedDocument` instances.
-     b. Fetches localized system prompt template via `template_parser.get_template("rag", "system_prompt", {})`.
-     c. Formats retrieved chunks using document prompt template `template_parser.get_template("rag", "document_prompt", {"doc_number": ..., "doc_text": ...})`. Chunks are pre-processed / truncated by `generation_client.process_text()`.
-     d. Formats query footer via `template_parser.get_template("rag", "footer_template", {"user_query": query_text})`.
-     e. Constructs conversation history array with system prompt: `[generation_client.construct_prompt(system_prompt, role="system")]`.
-     f. Concatenates formatted documents and footer prompt into `full_prompt`.
-     g. Calls `generation_client.generate_text(full_prompt, chat_history=chat_history)`.
-  5. Returns `200 OK` containing `answer`, `full_prompt`, and `chat_history`.
+### Vector DB Abstraction Layer
+Mini-RAG abstracts vector database operations via `VectorDBInterface` and instantiates them via `VectorDBProviderFactory` (`src/stores/vectordb/VectorDBProviderFactory.py`).
 
-```mermaid
-sequenceDiagram
-    autonumber
-    actor Client
-    participant Router as routes/nlp.py
-    participant NLPCtrl as controllers/NLPController.py
-    participant Parser as TemplateParser
-    participant VectorDB as app.state.vector_db_client
-    participant GenLLM as app.state.generation_client
+### Supported Vector Databases
+1. **Qdrant (`QdrantDBProvider`)**: Local or distributed vector database utilizing HNSW indexes and payload filtering.
+2. **PgVector (`PgVectorProvider`)**: PostgreSQL extension storing embeddings directly alongside metadata tables in relational schemas.
 
-    Client->>Router: POST /api/v1/nlp/index/answer/1 {"text": "How to reset?", "top_k": 3}
-    Router->>NLPCtrl: answer_rag_query(project, "How to reset?", top_k=3)
-    NLPCtrl->>NLPCtrl: search_in_vector_db(...)
-    NLPCtrl->>VectorDB: search_by_vector(...)
-    VectorDB-->>NLPCtrl: Returns top retrieved documents
-    NLPCtrl->>Parser: get_template("rag", "system_prompt", {})
-    Parser-->>NLPCtrl: Returns system_prompt string
-    loop For each doc
-        NLPCtrl->>GenLLM: process_text(doc.text)
-        NLPCtrl->>Parser: get_template("rag", "document_prompt", vars)
-    end
-    NLPCtrl->>Parser: get_template("rag", "footer_template", {"user_query": ...})
-    NLPCtrl->>GenLLM: construct_prompt(system_prompt, role="system")
-    NLPCtrl->>GenLLM: generate_text(full_prompt, chat_history)
-    GenLLM-->>NLPCtrl: Returns generated LLM response string
-    NLPCtrl-->>Router: Returns (answer, full_prompt, chat_history)
-    Router-->>Client: 200 OK {"message": "...", "answer": "...", "full_prompt": "...", "chat_history": [...]}
-```
+### Key Capabilities
+- **Distance Metrics**: Supports `COSINE`, `DOT`, and `EUCLIDEAN` vector metrics.
+- **Collection Management**: Automatic collection creation based on embedding vector dimensions (`EMBEDDING_MODEL_SIZE`).
+- **PgVector Index Threshold**: Configurable threshold (`VECTOR_DB_PGVECTOR_INDEX_THREADHOLD`) to automatically create HNSW vector indexes when chunk count exceeds thresholds.
 
 ---
 
-## 4. Function & Class Relationships
+## 10. LLM & Embedding Provider Architecture
 
-### Controller to Store & Model Dependencies
+Mini-RAG decouples AI provider logic using the Abstract Factory Pattern (`src/stores/llm/LLMProviderFactory.py`).
+
+### Supported Providers
+- **OpenAI (`OpenAIProvider`)**: Generates text responses (e.g., `gpt-4o-mini`) and vector embeddings (e.g., `text-embedding-3-small`).
+- **Cohere (`CohereProvider`)**: Generates text responses (e.g., `command-r-plus`) and embeddings (e.g., `embed-multilingual-v3.0`).
+
+### Multi-Lingual Template Engine
+RAG prompt generation uses a `TemplateParser` configured for default and primary languages (`en` and `ar`). System prompts are rendered dynamically with context snippets and project metadata.
 
 ```mermaid
 classDiagram
-    class BaseController {
-        +Settings app_settings
-        +str base_dir
-        +str files_dir
-        +str database_dir
-        +generate_random_string(length) str
-        +get_database_path(db_name) str
-    }
-
-    class ProjectController {
-        +get_project_directory_path(project_id) str
-    }
-
-    class DataController {
-        +validate_uplaoded_file(file) tuple
-        +generate_unique_filepath(original_filename, project_id) tuple
-        +get_cleaned_file_name(original_filename) str
-    }
-
-    class ProcessController {
-        +int project_id
-        +str project_directory_path
-        +get_file_extension(file_id) str
-        +get_file_loader(file_id) DocumentLoader
-        +get_file_content(file_id) list
-        +process_file_content(file_content, file_id, chunk_size, overlap_size) list
-    }
-
-    class NLPController {
-        +VectorDBInterface vectordb_client
-        +LLMInterface embedding_client
-        +LLMInterface generation_client
-        +TemplateParser template_parser
-        +create_collection_name(project_id) str
-        +reset_vector_database_collection(project) bool
-        +get_vector_db_collection_info(project) dict
-        +index_into_vector_db(project, data_chunks, do_reset) bool
-        +search_in_vector_db(project, query_text, top_k) List~RetrievedDocument~
-        +answer_rag_query(project, query_text, top_k) tuple
-    }
-
-    BaseController <|-- ProjectController
-    BaseController <|-- DataController
-    BaseController <|-- ProcessController
-    BaseController <|-- NLPController
-
-    DataController ..> ProjectController : calls
-    ProcessController ..> ProjectController : calls
-    NLPController --> VectorDBInterface : depends on
-    NLPController --> LLMInterface : depends on
-    NLPController --> TemplateParser : depends on
-```
-
-### Store Abstraction Hierarchy
-
-```mermaid
-classDiagram
-    class VectorDBInterface {
-        <<interface>>
-        +connect()*
-        +disconnect()*
-        +is_collection_exists(collection_name)* bool
-        +create_collection(collection_name, vector_dimension, do_reset)* bool
-        +delete_collection(collection_name)*
-        +get_collection_info(collection_name)* dict
-        +insert_one(collection_name, text, vector_id, vector, metadata)* bool
-        +insert_many(collection_name, texts, vector_ids, vectors, metadatas)* bool
-        +search_by_vector(collection_name, vector, top_k)* List~RetrievedDocument~
-    }
-
-    class QdrantDBProvider {
-        +QdrantClient client
-        +str db_path
-        +Distance distance_method
-    }
-
-    class PgVectorProvider {
-        +AsyncEngine db_client
-        +str distance_method
-        +int index_threadhold
-    }
-
-    VectorDBInterface <|.. QdrantDBProvider
-    VectorDBInterface <|.. PgVectorProvider
-
     class LLMInterface {
         <<interface>>
-        +set_generation_model(model_id)*
-        +set_embedding_model(model_id, embedding_size)*
-        +generate_text(prompt, chat_history, max_output_tokens, temperature)* str
-        +generate_embedding(text, document_type)* list
-        +construct_prompt(prompt, role)* dict
-        +process_text(text)* str
+        +set_generation_model(model_name)
+        +set_embedding_model(model_name, size)
+        +generate_text(prompt, chat_history)
+        +embed_text(text)
+        +embed_batch(texts)
     }
 
     class OpenAIProvider {
-        +OpenAI client
-        +str generation_model_id
-        +str embedding_model_id
+        +api_key: str
+        +api_url: str
+        +generate_text(...)
+        +embed_text(...)
     }
 
     class CohereProvider {
-        +ClientV2 client
-        +str generation_model_id
-        +str embedding_model_id
+        +api_key: str
+        +generate_text(...)
+        +embed_text(...)
+    }
+
+    class LLMProviderFactory {
+        +config: Settings
+        +get_provider(provider_name) LLMInterface
     }
 
     LLMInterface <|.. OpenAIProvider
     LLMInterface <|.. CohereProvider
+    LLMProviderFactory ..> LLMInterface
 ```
 
 ---
 
-## 5. Database Flow & Schema Architecture
+## 11. Services Overview
 
-### Entity-Relationship (ER) Diagram
-
-```mermaid
-erDiagram
-    projects ||--o{ assets : owns
-    projects ||--o{ chunks : owns
-    assets ||--o{ chunks : contains
-
-    projects {
-        int project_id PK
-        uuid project_uuid UK
-        datetime created_at
-        datetime updated_at
-    }
-
-    assets {
-        int asset_id PK
-        uuid asset_uuid UK
-        string asset_type
-        string asset_name
-        int asset_size
-        jsonb asset_config
-        int asset_project_id FK
-        datetime created_at
-        datetime updated_at
-    }
-
-    chunks {
-        int chunk_id PK
-        uuid chunk_uuid UK
-        text chunk_text
-        jsonb chunk_metadata
-        int chunk_order
-        int chunk_project_id FK
-        int chunk_asset_id FK
-        datetime created_at
-        datetime updated_at
-    }
-````
-
-
-### Relational Database Models & Indexes
-
-1. **`projects` Table**:
-   - `project_id`: Primary key integer.
-   - `project_uuid`: Unique UUID v4 for external system references.
-   - Relationships: `assets` and `chunks` set to `cascade="all, delete-orphan"`.
-
-2. **`assets` Table**:
-   - Stores original file metadata uploaded by users.
-   - Index: `ix_asset_project_id` on `asset_project_id` for fast query filtering by project.
-
-3. **`chunks` Table**:
-   - Stores text chunks parsed from file assets.
-   - Indexes:
-     - `ix_chunk_project_id` on `chunk_project_id` (enables paginated retrieval of project text chunks).
-     - `ix_chunk_asset_id` on `chunk_asset_id` (enables asset-scoped cleanup).
-
-### Session & Transaction Management
-
-The database session pool is managed asynchronously via SQLAlchemy 2.0 and `asyncpg`:
-
-```python
-# Startup in main.py
-postges_conn_str = f"postgresql+asyncpg://{USER}:{PASS}@{HOST}:{PORT}/{DB}"
-app.state.db_engine = create_async_engine(postges_conn_str)
-app.state.db_client = async_sessionmaker(
-    bind=app.state.db_engine,
-    class_=AsyncSession,
-    expire_on_commit=False
-)
-```
-
-Each repository model (`ProjectModel`, `AssetModel`, `ChunkModel`) executes queries using isolated async transaction blocks:
-
-```python
-async with self.db_client() as session:
-    async with session.begin():
-        # Execute SQLAlchemy select/insert/delete query
-    await session.commit()
-```
-
-### Migrations (Alembic)
-
-Database schema migrations are located under `src/models/db_schemas/minirag/alembic/versions/`:
-- `eccbf472cf4a_initial_commit.py`: Creates initial `projects`, `assets`, and `chunks` tables.
-- `554daecc6681_change_chunk_text_to_text.py`: Alters `chunk_text` column from `String` to `Text` for unlimited character capacity.
-- `5378ab118c04_make_updated_at_nullable.py`: Updates timestamp constraints.
+| Service Name | Technology / Image | Port(s) | Responsibility | Communication Protocol |
+| :--- | :--- | :--- | :--- | :--- |
+| **FastAPI** | `minirag:latest` | `8000` | Core HTTP REST API server for projects, file upload, and RAG search | HTTP / REST |
+| **Celery Worker** | `minirag:latest` | N/A | Distributed background worker executing processing and indexing tasks | AMQP (RabbitMQ) / Redis / SQL |
+| **Celery Beat** | `minirag:latest` | N/A | Scheduler for periodic background maintenance tasks | AMQP (RabbitMQ) |
+| **Celery Flower** | `minirag:latest` | `5555` | Web dashboard for real-time Celery worker monitoring | HTTP |
+| **Nginx** | `nginx:1.30.4` | `80` | Reverse proxy and load balancer routing requests to FastAPI | HTTP Proxy |
+| **PostgreSQL / PgVector** | `pgvector:0.8.6-pg17` | `5432` | Primary relational store for metadata, assets, chunks, task executions, and vectors | PostgreSQL Async Wire Protocol |
+| **Qdrant** | `qdrant/qdrant:v1.19.0` | `6333`, `6334` | High-performance vector database storing document embeddings | REST / gRPC |
+| **Redis** | `redis:8.8` | `6379` | In-memory store acting as Celery Result Backend and caching tier | Redis RESP Protocol |
+| **RabbitMQ** | `rabbitmq:3.13-management` | `5672`, `15672` | AMQP message broker managing Celery queues and worker routing | AMQP 0-9-1 / HTTP UI |
+| **Prometheus** | `prom/prometheus:v3.14.0` | `9090` | Time-series metrics collector pulling system and application metrics | HTTP Scraping |
+| **Grafana** | `grafana/grafana:13.1.4` | `3000` | Visualization dashboard for metrics and observability alerts | HTTP |
+| **Node Exporter** | `prom/node-exporter:v1.12.1` | `9100` | Host hardware and OS metrics collector for Prometheus | HTTP Scraping |
+| **Postgres Exporter** | `postgres-exporter:v0.20.1` | `9187` | PostgreSQL database performance metrics exporter | HTTP Scraping |
 
 ---
 
-## 6. Vector Search & RAG Flow
-
-### End-to-End RAG Pipeline Diagram
+## 12. Project Structure
 
 ```
-[Raw Document (PDF/TXT)]
-          │
-          ▼  (POST /api/v1/data/upload)
-[Disk: src/assets/files/{project_id}/ + PostgreSQL: assets table]
-          │
-          ▼  (POST /api/v1/data/process)
-[PyMuPDFLoader / TextLoader]
-          │
-          ▼
-[RecursiveCharacterTextSplitter] ──► [PostgreSQL: chunks table]
-                                             │
-                                             ▼  (POST /api/v1/nlp/index/push)
-                                  [OpenAI / Cohere Embedding API]
-                                             │
-                                             ▼
-                                  [Qdrant / PgVector Database]
-                                             ▲
-                                             │  (POST /api/v1/nlp/index/answer)
-[User Query] ──► [Embed Query Vector] ───────┘
-                        │
-                        ▼  (Top-K Similarity Match)
-           [Retrieved Context Chunks]
-                        │
-                        ▼
-            [TemplateParser Engine]
-       (system_prompt + document_prompts + footer)
-                        │
-                        ▼
-          [OpenAI / Cohere Generation LLM]
-                        │
-                        ▼
-                 [Synthesized Answer]
-```
-
-### Vector Provider Implementation Comparison
-
-| Feature | Qdrant Provider (`QdrantDBProvider`) | PgVector Provider (`PgVectorProvider`) |
-| :--- | :--- | :--- |
-| **Backend Engine** | Embedded disk-based Qdrant client (`qdrant_client`) | PostgreSQL extension `pgvector` via SQLAlchemy |
-| **Storage Location** | `src/assets/database/qdrant_db` | PostgreSQL dynamic tables (`collection_{project_id}`) |
-| **Indexing Strategy** | HNSW (Hierarchical Navigable Small World) auto-managed | IVFFlat index created dynamically when rows exceed `VECTOR_DB_PGVECTOR_INDEX_THREADHOLD` |
-| **Distance Operations** | `models.Distance.COSINE`, `DOT` | Cosine (`<=>`), Euclidean (`<->`), Inner Product (`<#>`) |
-| **Upsert Logic** | Batch points upsert via `client.upsert()` | Parameterized SQL bulk insert via `session.execute()` |
-
-### Template Parsing & Prompt Localization
-
-System prompts are localized per project settings (`PRIMARY_LANGUAGE` = `en` or `ar`):
-- `TemplateParser.get_template(group="rag", key="system_prompt")`
-- Substitutes variables into `string.Template` structures:
-
-**English (`locales/en/rag.py`)**:
-```text
-Document No: ${doc_number}
-Document Text: ${doc_text}
-
-Based on the above documents, please generate a response to the user query.
-The query is: ${user_query}
-## Answer:
-```
-
-**Arabic (`locales/ar/rag.py`)**:
-```text
-المستند رقم: ${doc_number}
-نص المستند: ${doc_text}
-
-بناءً على المستندات السابقة، يرجى إنشاء إجابة لاستفسار المستخدم.
-الاستفسار: ${user_query}
-## الإجابة:
+mini-rag/
+├── docker/                             # Docker Compose & service configurations
+│   ├── docker-compose.yml              # Multi-container orchestration
+│   ├── minirag/                        # Application Dockerfile & entrypoint
+│   ├── nginx/                          # Nginx reverse proxy configuration
+│   ├── prometheus/                     # Prometheus scraping rules
+│   └── rabbitmq/                       # RabbitMQ broker settings
+├── docs/                               # Developer manuals & architecture roadmaps
+├── src/                                # Source code directory
+│   ├── assets/                         # Local asset storage & database files
+│   ├── controllers/                    # Business logic controllers
+│   │   ├── BaseController.py           # File & path helper utilities
+│   │   ├── DataController.py           # File upload & asset management
+│   │   ├── NLPController.py            # RAG search & LLM prompt synthesis
+│   │   ├── ProcessController.py        # Asynchronous ETL task dispatching
+│   │   └── ProjectController.py        # Project CRUD logic
+│   ├── helpers/                        # Configuration & environment loader
+│   │   └── config.py                   # Pydantic Settings management
+│   ├── mini_rag/                       # Application initializers
+│   │   ├── main.py                     # FastAPI application factory & router mounting
+│   │   └── celery_app.py               # Celery app instance & queue configurations
+│   ├── models/                         # Database ORM models & Pydantic schemas
+│   │   ├── db_schemas/minirag/         # SQLAlchemy models & Alembic migrations
+│   │   └── enums/                      # Application state enums
+│   ├── routes/                         # FastAPI HTTP endpoint definitions
+│   │   ├── base.py                     # Health check & welcome endpoints
+│   │   ├── data.py                     # Upload & process routes
+│   │   └── nlp.py                      # Push index, search, and answer routes
+│   ├── stores/                         # External provider abstraction layer
+│   │   ├── llm/                        # LLM provider implementations (OpenAI, Cohere)
+│   │   └── vectordb/                   # Vector DB implementations (Qdrant, PgVector)
+│   ├── tasks/                          # Celery task definitions
+│   │   ├── file_processing.py          # Document parsing & text extraction
+│   │   ├── data_indexing.py            # Embedding generation & vector storage
+│   │   ├── process_workflow.py         # Task chain orchestrator
+│   │   └── mainteinance.py             # Idempotency table cleanup beat task
+│   └── utils/                          # Core system utilities
+│       ├── IdempotencyManager.py       # SHA-256 task deduplication engine
+│       └── metrics.py                  # Prometheus HTTP middleware
+├── flowerconfig.py                     # Celery Flower configuration
+├── pyproject.toml                      # Project dependencies & metadata (uv)
+├── PROJECT_ARCHITECTURE.md              # In-depth internal technical documentation
+└── README.md                           # Main GitHub documentation
 ```
 
 ---
 
-## 7. Configuration & Dependency Flow
+## 13. API Reference
 
-### Environment Variable Injector (`src/helpers/config.py`)
+High-level summary of primary REST API endpoints available under `/api/v1`:
 
-Configuration management utilizes `pydantic-settings`. All settings are read from `.env` and cached using `@lru_cache()`:
+| Endpoint | Method | Responsibility | Parameters / Body |
+| :--- | :--- | :--- | :--- |
+| `/api/v1/welcome` | `GET` | API Health Check and welcome message | None |
+| `/api/v1/data/upload/{project_id}` | `POST` | Upload text or PDF files for a project | `project_id` (Path), `file` (Form Upload) |
+| `/api/v1/data/process/{project_id}` | `POST` | Trigger asynchronous file extraction and indexing task chain | `project_id` (Path), `process_request` (Body) |
+| `/api/v1/nlp/index/push/{project_id}` | `POST` | Manually push embeddings to the vector database | `project_id` (Path), `push_request` (Body) |
+| `/api/v1/nlp/index/info/{project_id}` | `GET` | Fetch vector database collection info and point counts | `project_id` (Path) |
+| `/api/v1/nlp/index/search/{project_id}` | `POST` | Execute vector similarity search without LLM generation | `project_id` (Path), `search_request` (Body) |
+| `/api/v1/nlp/index/answer/{project_id}` | `POST` | Execute full RAG pipeline (search context + synthesize LLM answer) | `project_id` (Path), `answer_request` (Body) |
 
-```mermaid
-flowchart LR
-    DotEnv[".env File"] --> Pydantic["Settings(BaseSettings)"]
-    Pydantic --> LRUCache["@lru_cache get_settings()"]
-    LRUCache --> Main["main.py (lifespan)"]
-    LRUCache --> Controllers["Controllers (BaseController)"]
-    LRUCache --> Models["Models (BaseDataModel)"]
-```
-
-### FastAPI `app.state` Dependency Injection Map
-
-During startup, `main.py` initializes core singletons and attaches them to `app.state`:
-
-```
-app.state.db_engine          --> AsyncEngine (PostgreSQL asyncpg)
-app.state.db_client          --> async_sessionmaker<AsyncSession>
-app.state.generation_client  --> LLMInterface (OpenAI / Cohere text generator)
-app.state.embedding_client   --> LLMInterface (OpenAI / Cohere vector embedder)
-app.state.vector_db_client   --> VectorDBInterface (Qdrant / PgVector client)
-app.state.template_parser    --> TemplateParser (Localized prompt parser)
-```
-
-Routes access dependencies via request context: `request.app.state.<dependency>`.
+> 💡 For comprehensive parameter definitions, Pydantic schemas, and example response payloads, refer to [**PROJECT_ARCHITECTURE.md**](PROJECT_ARCHITECTURE.md#3-route-by-route-deep-dive).
 
 ---
 
-## 8. Application Startup Lifecycle
+## 14. Observability & Monitoring
 
-### Lifespan Event Workflow
+Mini-RAG includes a production monitoring stack built into its architecture.
 
-```mermaid
-sequenceDiagram
-    autonumber
-    participant App as FastAPI App
-    participant Lifespan as main.py lifespan()
-    participant Config as helpers/config.py
-    participant DB as PostgreSQL Async Engine
-    participant LLMFactory as LLMProviderFactory
-    participant VecFactory as VectorDBProviderFactory
-    participant Parser as TemplateParser
+### Prometheus Metrics
+FastAPI registers Prometheus metrics middleware (`src/utils/metrics.py`) exposed at `/metrics`:
+- `http_requests_total`: Counter tracking total HTTP requests partitioned by `method`, `endpoint`, and `http_status`.
+- `http_request_latency_seconds`: Histogram measuring HTTP request processing latency.
 
-    App->>Lifespan: Startup Triggered
-    Lifespan->>Config: get_settings()
-    Config-->>Lifespan: Settings instance loaded from .env
-    Lifespan->>DB: create_async_engine(postgresql+asyncpg://...)
-    Lifespan->>DB: async_sessionmaker(bind=db_engine)
-    Lifespan->>LLMFactory: get_provider(settings.GENERATION_BACKEND)
-    LLMFactory-->>Lifespan: app.state.generation_client created
-    Lifespan->>LLMFactory: get_provider(settings.EMBEDDING_BACKEND)
-    LLMFactory-->>Lifespan: app.state.embedding_client created
-    Lifespan->>VecFactory: get_provider(settings.VECTOR_DB_BACKEND)
-    VecFactory-->>Lifespan: app.state.vector_db_client created
-    Lifespan->>Lifespan: app.state.vector_db_client.connect()
-    Lifespan->>Parser: TemplateParser(PRIMARY_LANGUAGE, DEFAULT_LANGUAGE)
-    Lifespan-->>App: Yield execution (Server running)
-    
-    Note over App: Processing HTTP Requests...
-    
-    App->>Lifespan: Shutdown Triggered
-    Lifespan->>DB: db_engine.dispose()
-    Lifespan->>Lifespan: vector_db_client.disconnect()
-    Lifespan-->>App: Shutdown Complete
-```
+### Dashboards & Exporters
+- **Grafana (`:3000`)**: Pre-configured visualization dashboards pulling metrics from Prometheus.
+- **Node Exporter (`:9100`)**: Provides host CPU, memory, network, and disk metrics.
+- **Postgres Exporter (`:9187`)**: Monitors PostgreSQL connection pools, transaction throughput, and disk footprint.
+- **Flower (`:5555`)**: Celery web interface monitoring real-time queue lengths, task latency, worker health, and task failures.
 
 ---
 
-## 9. End-to-End Execution Traces
+## 15. Production Reliability & Fault Tolerance
 
-### Example 1: Document Processing Pipeline (`POST /data/process/1`)
+Mini-RAG enforces production resilience through several architectural guarantees:
 
-```text
-1. Client sends POST request to /api/v1/data/process/1
-   ↓
-2. src/routes/data.py: process_data(request, project_id=1, process_request)
-   ↓
-3. src/models/ProjectModel.py: get_project_or_create_one(1) -> returns Project(project_id=1)
-   ↓
-4. src/models/AssetModel.py: get_assets_by_project_id(1) -> returns [Asset(asset_id=10, asset_name="key_doc.pdf")]
-   ↓
-5. src/controllers/ProcessController.py: get_file_content("key_doc.pdf")
-   ↓ (Determines file extension is .pdf)
-6. langchain_community.document_loaders: PyMuPDFLoader("src/assets/files/1/key_doc.pdf").load()
-   ↓
-7. src/controllers/ProcessController.py: process_file_content(...)
-   ↓
-8. langchain_text_splitters: RecursiveCharacterTextSplitter(chunk_size=1000, overlap=20).create_documents(...)
-   ↓
-9. src/routes/data.py: constructs list of DataChunk(...) models
-   ↓
-10. src/models/ChunkModel.py: insert_many_chunks(chunks) -> Executes SQLAlchemy session.add_all(...)
-   ↓
-11. PostgreSQL DB: Commits records to `chunks` table
-   ↓
-12. Client receives HTTP 200 OK {"message": "File processing successful.", "num_chunks_inserted": 24}
+1. **Decoupled Asynchronous Processing**: Offloads heavy workloads to Celery, maintaining responsive FastAPI HTTP response times.
+2. **Late Task Acknowledgements (`task_acks_late=True`)**: Unacknowledged messages are automatically re-routed by RabbitMQ if a worker container abruptly crashes.
+3. **SHA-256 Idempotency Engine**: Deduplicates repetitive task calls to protect data integrity and avoid duplicate vendor API costs.
+4. **Task Time Limits**: Enforces hard execution timeouts (`600s`) to terminate hung threads.
+5. **Durable Persistence**: All databases (PostgreSQL, Qdrant, Redis, RabbitMQ) map to named Docker volume mounts to prevent data loss across container restarts.
+6. **Container Health Checks**: Services use health check criteria (`pg_isready`, `redis-cli ping`, `rabbitmq-diagnostics ping`) before launching dependent application services.
+
+---
+
+## 16. Running the Project
+
+### Prerequisites
+- **Docker** & **Docker Compose** installed on host machine.
+- **Python 3.12+** & [**`uv`**](https://github.com/astral-sh/uv) (for local CLI development).
+
+### 1. Environment Setup
+Copy `.env.example` to `.env` and fill in necessary secrets:
+```bash
+cp .env.example .env
 ```
 
-### Example 2: RAG Question Answering (`POST /nlp/index/answer/1`)
+### 2. Launch Services with Docker Compose
+To start the entire Mini-RAG container stack (FastAPI, Celery Worker, Celery Beat, Flower, Nginx, PostgreSQL, Qdrant, Redis, RabbitMQ, Prometheus, Grafana, Exporters):
 
-```text
-1. Client sends POST request to /api/v1/nlp/index/answer/1 with {"text": "What is the warranty period?", "top_k": 3}
-   ↓
-2. src/routes/nlp.py: answer_rag_query(request, project_id=1, search_request)
-   ↓
-3. src/controllers/NLPController.py: answer_rag_query(project, query_text="What is the warranty period?", top_k=3)
-   ↓
-4. src/controllers/NLPController.py: search_in_vector_db(...)
-   ↓
-5. src/stores/llm/providers/OpenAIProvider.py: generate_embedding("What is the warranty period?", "query")
-   ↓ (Calls OpenAI Embeddings API)
-6. OpenAI API returns float vector [0.012, -0.054, ...]
-   ↓
-7. src/stores/vectordb/providers/QdrantDBProvider.py: search_by_vector("collection_1", query_vector, top_k=3)
-   ↓
-8. Qdrant returns top 3 matching PointStruct records with text payloads and similarity scores
-   ↓
-9. src/controllers/NLPController.py receives List[RetrievedDocument]
-   ↓
-10. src/stores/llm/templates/template_parser.py: get_template("rag", "system_prompt") & "document_prompt"
-   ↓
-11. src/controllers/NLPController.py formats full prompt containing retrieved chunks & user question
-   ↓
-12. src/stores/llm/providers/OpenAIProvider.py: generate_text(full_prompt, chat_history)
-   ↓ (Calls OpenAI Chat Completions API gpt-4o-mini)
-13. OpenAI API returns synthesized answer text string
-   ↓
-14. Client receives HTTP 200 OK {"message": "...", "answer": "The warranty period is 12 months...", "chat_history": [...]}
+```bash
+docker compose -f docker/docker-compose.yml up -d --build
+```
+
+### 3. Apply Database Migrations
+Run Alembic migrations to construct database tables in PostgreSQL:
+
+```bash
+docker compose -f docker/docker-compose.yml exec fastapi uv run alembic upgrade head
+```
+
+### 4. Access Service Dashboards
+
+- **FastAPI Documentation**: [http://localhost:8000/docs](http://localhost:8000/docs)
+- **Nginx Reverse Proxy**: [http://localhost:80](http://localhost:80)
+- **Celery Flower Dashboard**: [http://localhost:5555](http://localhost:5555)
+- **RabbitMQ Management UI**: [http://localhost:15672](http://localhost:15672)
+- **Prometheus Metrics**: [http://localhost:9090](http://localhost:9090)
+- **Grafana Dashboards**: [http://localhost:3000](http://localhost:3000)
+- **Qdrant Vector Web UI**: [http://localhost:6333/dashboard](http://localhost:6333/dashboard)
+
+---
+
+## 17. Configuration
+
+Mini-RAG uses Pydantic Settings (`src/helpers/config.py`) to parse environment variables from `.env`.
+
+### Key Configuration Categories
+
+```env
+# Application Settings
+APP_NAME="mini-RAG"
+APP_VERSION="0.1.0"
+PRIMARY_LANGUAGE="en"
+
+# PostgreSQL Configuration
+POSTGRES_USERNAME="postgres"
+POSTGRES_PASSWORD="secretpassword"
+POSTGRES_HOST="pgvector"
+POSTGRES_PORT=5432
+POSTGRES_MAIN_DATABASE="minirag"
+
+# Celery & Message Queue
+CELERY_BROKER_URL="amqp://guest:guest@rabbitmq:5672//"
+CELERY_RESULT_BACKEND="redis://:secretpassword@redis:6379/0"
+CELERY_ACKS_LATE=True
+CELERY_TASK_TIME_LIMIT=600
+
+# Vector Database Selection (qdrant | pgvector)
+VECTOR_DB_BACKEND="qdrant"
+VECTOR_DB_DISTANCE_METHOD="cosine"
+
+# LLM & Embedding Backends (openai | cohere)
+GENERATION_BACKEND="openai"
+GENERATION_MODEL_ID="gpt-4o-mini"
+EMBEDDING_BACKEND="openai"
+EMBEDDING_MODEL_ID="text-embedding-3-small"
+EMBEDDING_MODEL_SIZE=1536
 ```
 
 ---
 
-## 10. Important Design Decisions & Trade-offs
+## 18. Deep Architecture Documentation
 
-1. **Separation of Relational and Vector Data Stores**:
-   - *Decision*: Plain document chunks are stored in PostgreSQL (`chunks` table) while vector embeddings live in dedicated vector indices (`collection_{project_id}`).
-   - *Rationale*: Allows relational queries, chunk pagination, and transactional metadata updates in SQL, while delegating high-dimensional similarity math to specialized engines (Qdrant or pgvector).
+For in-depth implementation technical documentation, refer to:
 
-2. **Abstract Provider Factories for LLM & Vector DB**:
-   - *Decision*: Using `LLMInterface` and `VectorDBInterface` with factory classes.
-   - *Trade-off*: Adds an abstraction layer, but allows switching between cloud LLMs (OpenAI), local/alternative models (Cohere), embedded vector DBs (Qdrant), or SQL vector DBs (PgVector) purely via `.env` configuration changes without altering domain code.
+👉 [**`PROJECT_ARCHITECTURE.md`**](PROJECT_ARCHITECTURE.md)
 
-3. **Asynchronous Relational DB & Synchronous Store Operations**:
-   - *Decision*: PostgreSQL queries use `AsyncSession` / `asyncpg`, whereas vector DB and LLM client SDK calls execute in synchronous wrapper methods inside async controllers.
-   - *Future Enhancement*: Wrap vector DB upsert/search operations and external HTTP LLM calls in async executors (`asyncio.to_thread`) or native async SDK clients to prevent thread blocking under high request concurrency.
-
-4. **Localization Engine via Python `string.Template`**:
-   - *Decision*: Prompt templates are stored as Python modules with `string.Template` instances under `locales/{lang}/`.
-   - *Rationale*: Avoids complex external templating engine overhead (e.g. Jinja2) while remaining type-safe, simple, and extensible for multilingual RAG applications.
-
----
-
-## 11. Developer Navigation Guide
-
-### Practical "How-To" Scenarios
-
-- **"If I want to add a new API route, which files do I need to modify?"**
-  1. Add request/response Pydantic models in `src/routes/schemas/`.
-  2. Implement business logic methods in the target controller in `src/controllers/`.
-  3. Register the endpoint function in `src/routes/data.py` or `src/routes/nlp.py` (or create a new router file in `src/routes/` and register it in `src/mini_rag/main.py`).
-
-- **"If I want to add a new database model or column, where should I start?"**
-  1. Define the table or column in `src/models/db_schemas/minirag/schemas/`.
-  2. Update the repository model in `src/models/` to expose CRUD methods for the new model/column.
-  3. Generate and run an Alembic migration script under `src/models/db_schemas/minirag/alembic/versions/`.
-
-- **"If I want to add a new Vector Database provider (e.g., ChromaDB, Milvus, Weaviate)?"**
-  1. Create a new provider class under `src/stores/vectordb/providers/` inheriting from `VectorDBInterface`.
-  2. Implement all abstract methods (`connect`, `create_collection`, `insert_many`, `search_by_vector`, etc.).
-  3. Add the provider literal name to `VectorDBEnums.py` and register instantiation logic in `VectorDBProviderFactory.py`.
-
-- **"If I want to add a new LLM provider (e.g., Anthropic, Gemini, Ollama)?"**
-  1. Create a new provider class under `src/stores/llm/providers/` inheriting from `LLMInterface`.
-  2. Implement generation and embedding methods (`generate_text`, `generate_embedding`, `construct_prompt`).
-  3. Add provider key to `LLMEnums.py` and update `LLMProviderFactory.py`.
-
-- **"If I want to modify prompt templates?"**
-  - Edit template variables in `src/stores/llm/templates/locales/en/rag.py` (for English) or `src/stores/llm/templates/locales/ar/rag.py` (for Arabic).
-
-- **"Where should I put breakpoints for debugging?"**
-  - **Route request receipt**: `src/routes/data.py` or `src/routes/nlp.py` handler functions.
-  - **File loading & chunking**: `ProcessController.get_file_content()` and `ProcessController.process_file_content()`.
-  - **Vector embedding & RAG generation**: `NLPController.index_into_vector_db()` and `NLPController.answer_rag_query()`.
+### `PROJECT_ARCHITECTURE.md` Contents
+- **Deep Layered Architecture**: Component interactions and software boundaries.
+- **Project Structure & Dependency Mapping**: Exhaustive analysis of module imports and file dependencies.
+- **Route-by-Route Deep Dive**: Detailed query parameters, headers, payload models, and response structures for all API endpoints.
+- **Function & Class Relationships**: Method signatures and class interaction diagrams.
+- **Database Schema Architecture**: Relational design of `projects`, `assets`, `datachunks`, and `celery_task_executions`.
+- **Developer Navigation Guide**: Step-by-step instructions for adding new routes, custom vector DB providers, or additional LLM backends.
